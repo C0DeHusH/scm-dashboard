@@ -371,11 +371,9 @@ st.markdown(
             }
         }
 
-        /* Executive dashboard canvas */
+        /* Executive dashboard canvas — calm, non-layered background */
         [data-testid="stAppViewContainer"] {
-            background:
-                radial-gradient(circle at 12% 0%, rgba(99,102,241,0.055), transparent 28rem),
-                radial-gradient(circle at 92% 8%, rgba(14,165,233,0.045), transparent 26rem);
+            background: var(--background-color);
         }
 
         /* ---------- Sidebar control center ---------- */
@@ -416,164 +414,109 @@ st.markdown(
            parent-layout side effects and guarantees the hero scrolls normally. */
 
         .hero-shell {
-            position: relative;
             box-sizing: border-box;
             width: 100%;
             min-width: 0;
-            margin: 0 0 1.35rem 0;
-            isolation: isolate;
-            overflow: hidden;
-            border: 1px solid rgba(129, 140, 248, 0.28);
-            border-radius: 22px;
-            padding: clamp(22px, 2.2vw, 34px) clamp(20px, 2.8vw, 44px);
-            background:
-                radial-gradient(circle at 88% 14%, rgba(56,189,248,0.13), transparent 24rem),
-                radial-gradient(circle at 6% 8%, rgba(99,102,241,0.20), transparent 30rem),
-                linear-gradient(135deg, #0b1220 0%, #111a2d 48%, #0f172a 100%);
-            box-shadow:
-                0 20px 50px rgba(2, 6, 23, 0.24),
-                inset 0 1px 0 rgba(255,255,255,0.055);
+            margin: 0 0 1.45rem 0;
+            padding: clamp(24px, 2.2vw, 36px) clamp(22px, 2.6vw, 42px);
+            border: 1px solid rgba(100, 116, 139, 0.28);
+            border-radius: 20px;
+            background: linear-gradient(120deg, #0b1220 0%, #111827 52%, #172033 100%);
+            box-shadow: 0 14px 34px rgba(2, 6, 23, 0.18);
+            overflow: visible;
         }
 
-        .hero-shell::before {
-            content: "";
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 5px;
-            background: linear-gradient(180deg, #818cf8, #38bdf8 58%, #34d399);
-            opacity: 0.95;
-        }
-
-        .hero-shell::after {
-            content: "";
-            position: absolute;
-            right: -90px;
-            top: -120px;
-            width: 300px;
-            height: 300px;
-            border-radius: 50%;
-            border: 1px solid rgba(255,255,255,0.045);
-            box-shadow:
-                0 0 0 42px rgba(255,255,255,0.016),
-                0 0 0 84px rgba(255,255,255,0.009);
-            pointer-events: none;
-        }
-
-        .hero-grid {
-            position: relative;
-            z-index: 1;
+        .hero-grid,
+        .hero-copy {
             display: block;
             width: 100%;
             min-width: 0;
-        }
-
-        .hero-copy {
-            position: relative;
-            z-index: 2;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            justify-content: flex-start;
-            gap: 0;
-            width: 100%;
-            min-width: 0;
-            max-width: 1180px;
+            max-width: 100%;
+            position: static;
         }
 
         .hero-kicker,
         .hero-title,
         .hero-subtitle {
+            display: block;
             position: static !important;
             float: none !important;
             clear: both;
             width: 100%;
-            min-width: 0;
             max-width: 100%;
             height: auto !important;
             min-height: 0 !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
             transform: none !important;
             white-space: normal !important;
+            word-break: normal;
+            overflow-wrap: anywhere;
             overflow: visible !important;
             text-overflow: clip !important;
-            word-break: normal;
-            overflow-wrap: break-word;
         }
 
         .hero-kicker {
-            display: flex;
-            align-items: center;
-            gap: 9px;
-            color: #c7d2fe;
-            font-size: clamp(0.65rem, 0.72vw, 0.77rem);
-            font-weight: 850;
-            line-height: 1.35;
-            letter-spacing: 0.12em;
+            color: #a5b4fc;
+            font-size: clamp(0.64rem, 0.70vw, 0.76rem);
+            font-weight: 800;
+            line-height: 1.45 !important;
+            letter-spacing: 0.11em;
             text-transform: uppercase;
-            margin: 0 0 12px 0 !important;
-        }
-
-        .hero-kicker::before {
-            content: "";
-            flex: 0 0 auto;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #34d399;
-            box-shadow: 0 0 0 4px rgba(52,211,153,0.13);
+            margin-top: 0 !important;
+            margin-bottom: 14px !important;
         }
 
         .hero-title {
-            display: block;
             color: #f8fafc;
-            font-size: clamp(1.52rem, 2.35vw, 2.55rem);
+            font-size: clamp(1.65rem, 2.35vw, 2.65rem);
             font-weight: 900;
-            line-height: 1.20 !important;
-            letter-spacing: -0.028em;
-            margin: 0 0 16px 0 !important;
-            padding: 0 !important;
-            text-wrap: wrap;
+            line-height: 1.16 !important;
+            letter-spacing: -0.025em;
+            margin-top: 0 !important;
+            margin-bottom: 18px !important;
         }
 
         .hero-subtitle {
-            display: block;
-            max-width: 1120px;
+            max-width: 1180px;
             color: #cbd5e1;
-            font-size: clamp(0.82rem, 0.92vw, 0.98rem);
+            font-size: clamp(0.84rem, 0.95vw, 1.00rem);
             font-weight: 500;
-            line-height: 1.60 !important;
-            margin: 0 !important;
-            padding: 0 0 2px 0 !important;
+            line-height: 1.65 !important;
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
         }
 
         @media (max-width: 760px) {
             .hero-shell {
-                border-radius: 17px;
-                padding: 19px 16px 20px 19px;
+                padding: 21px 18px 23px 18px;
+                border-radius: 16px;
+                margin-bottom: 1.15rem;
             }
 
             .hero-kicker {
                 font-size: 0.62rem;
-                letter-spacing: 0.09em;
-                margin-bottom: 10px !important;
+                line-height: 1.45 !important;
+                margin-bottom: 11px !important;
             }
 
             .hero-title {
-                font-size: clamp(1.42rem, 7vw, 2.05rem);
-                line-height: 1.14 !important;
-                margin-bottom: 12px !important;
+                font-size: clamp(1.42rem, 7vw, 2.00rem);
+                line-height: 1.18 !important;
+                margin-bottom: 14px !important;
             }
 
             .hero-subtitle {
                 font-size: 0.80rem;
-                line-height: 1.55 !important;
+                line-height: 1.58 !important;
             }
         }
 
         @media (max-width: 420px) {
             .hero-shell {
-                padding: 17px 13px 18px 17px;
+                padding: 18px 14px 20px 14px;
             }
 
             .hero-title {
@@ -581,8 +524,7 @@ st.markdown(
             }
 
             .hero-subtitle {
-                font-size: 0.75rem;
-                line-height: 1.50 !important;
+                font-size: 0.76rem;
             }
         }
 
@@ -790,13 +732,42 @@ st.markdown(
         }
 
         /* ---------- Pareto ---------- */
+        .pareto-panel-spacer {
+            height: 0.35rem;
+        }
+
         .pareto-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0.55rem 0;
+            gap: 12px;
+            width: 100%;
+            min-width: 0;
+            padding: 0.70rem 0 0.62rem 0;
             border-bottom: 2px solid;
-            margin-bottom: 0.85rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .pareto-header > span:first-child {
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+
+        .pareto-count {
+            flex: 0 0 auto;
+            white-space: nowrap;
+            border: 1px solid rgba(128,128,128,0.25);
+            padding: 4px 9px;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 800;
+        }
+
+        /* Full-width Pareto tables: no browser-level horizontal scrolling. */
+        .pareto-table-shell {
+            width: 100%;
+            min-width: 0;
+            overflow: hidden;
         }
 
         /* ---------- Streamlit controls ---------- */
@@ -806,9 +777,18 @@ st.markdown(
         }
 
         div[data-testid="stDataFrame"] {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
             border: 1px solid rgba(148, 163, 184, 0.18);
             border-radius: 12px;
-            overflow: hidden;
+            overflow: hidden !important;
+        }
+
+        div[data-testid="stDataFrame"] > div {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
         }
 
         hr {
@@ -2033,9 +2013,7 @@ def render_pareto_table(df, pareto_class, hex_color):
             <span style='font-size:1.05rem; font-weight:900; color:{hex_color};'>
                 {pareto_class.upper()}
             </span>
-            <span style='border:1px solid rgba(128,128,128,0.25); padding:4px 9px;
-                         border-radius:999px; font-size:0.72rem; font-weight:800;
-                         color:{hex_color};'>
+            <span class='pareto-count' style='color:{hex_color};'>
                 ● {item_count} Items
             </span>
         </div>
@@ -2075,26 +2053,33 @@ def render_pareto_table(df, pareto_class, hex_color):
     final_df = class_df[display_cols].copy()
     final_df.columns = ["Rank", "Model", "Status", "Inventory", "Transfer", "DOI"]
 
+    st.markdown("<div class='pareto-table-shell'>", unsafe_allow_html=True)
     st.dataframe(
         final_df,
         use_container_width=True,
         hide_index=True,
         column_config={
-            "Rank": st.column_config.NumberColumn("Rank", format="%d"),
-            "Inventory": st.column_config.NumberColumn("Inventory", format="%.0f"),
-            "Transfer": st.column_config.NumberColumn("Transfer", format="%.0f"),
-            "DOI": st.column_config.NumberColumn("DOI", format="%.0f"),
+            "Rank": st.column_config.NumberColumn("Rank", format="%d", width="small"),
+            "Model": st.column_config.TextColumn("Model", width="medium"),
+            "Status": st.column_config.TextColumn("Status", width="medium"),
+            "Inventory": st.column_config.NumberColumn("Inventory", format="%.0f", width="small"),
+            "Transfer": st.column_config.NumberColumn("Transfer", format="%.0f", width="small"),
+            "DOI": st.column_config.NumberColumn("DOI", format="%.0f", width="small"),
         },
     )
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
-col_a, col_b, col_c = st.columns(3, gap="medium")
-with col_a:
-    render_pareto_table(branch_data, "Class A", "#f87171")
-with col_b:
-    render_pareto_table(branch_data, "Class B", "#fbbf24")
-with col_c:
-    render_pareto_table(branch_data, "Class C", "#4ade80")
+# Full-width stacked Pareto panels eliminate horizontal scrolling and keep
+# all six operational columns readable at standard laptop/browser widths.
+for pareto_class, pareto_color in [
+    ("Class A", "#f87171"),
+    ("Class B", "#fbbf24"),
+    ("Class C", "#4ade80"),
+]:
+    with st.container(border=True):
+        render_pareto_table(branch_data, pareto_class, pareto_color)
+    st.markdown("<div class='pareto-panel-spacer'></div>", unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 st.caption(
