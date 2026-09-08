@@ -335,55 +335,76 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-        /* ---------- Global / collision-safe layout ---------- */
-        /*
-         * Do NOT force the main block to width:100% while the Streamlit sidebar is
-         * open. Streamlit already calculates the available main width. Leaving that
-         * calculation intact prevents the sidebar and dashboard from occupying the
-         * same visual space on desktop and at intermediate browser widths.
-         */
+        /* ---------- Global / maximum-width layout ---------- */
+        html, body, [data-testid="stAppViewContainer"] {
+            overflow-x: hidden !important;
+        }
+
+        /* Let Streamlit calculate the space beside the sidebar, then use all of it. */
         .block-container,
         [data-testid="stMainBlockContainer"] {
-            width: auto !important;
-            max-width: none !important;
+            box-sizing: border-box !important;
+            width: 100% !important;
+            max-width: 100% !important;
             min-width: 0 !important;
-            padding-top: 1.15rem !important;
-            padding-bottom: 2.75rem !important;
-            padding-left: clamp(1.00rem, 1.55vw, 1.75rem) !important;
-            padding-right: clamp(1.00rem, 1.55vw, 1.75rem) !important;
+            padding-top: 0.55rem !important;
+            padding-bottom: 2.50rem !important;
+            padding-left: 0.45rem !important;
+            padding-right: 0.45rem !important;
             margin: 0 !important;
-            overflow: visible !important;
+            overflow-x: hidden !important;
         }
 
         section[data-testid="stMain"],
-        section[data-testid="stMain"] > div {
+        section[data-testid="stMain"] > div,
+        [data-testid="stMainBlockContainer"] > div {
             min-width: 0 !important;
-            max-width: none !important;
-            overflow-x: clip !important;
+            max-width: 100% !important;
+            overflow-x: hidden !important;
+        }
+
+        @media (min-width: 1600px) {
+            .block-container,
+            [data-testid="stMainBlockContainer"] {
+                padding-left: 0.55rem !important;
+                padding-right: 0.55rem !important;
+            }
         }
 
         @media (max-width: 900px) {
             .block-container,
             [data-testid="stMainBlockContainer"] {
-                padding-left: 0.75rem !important;
-                padding-right: 0.75rem !important;
-                padding-top: 0.85rem !important;
+                padding-left: 0.35rem !important;
+                padding-right: 0.35rem !important;
+                padding-top: 0.45rem !important;
             }
         }
 
-        /* Executive dashboard canvas — calm, non-layered background */
+        /* Calm page background: never layer behind the executive banner. */
         [data-testid="stAppViewContainer"] {
-            background: var(--background-color);
+            background: var(--background-color) !important;
+            background-image: none !important;
         }
 
         /* ---------- Sidebar control center ---------- */
         [data-testid="stSidebar"] {
-            border-right: 1px solid rgba(148,163,184,0.18);
-            box-shadow: 8px 0 28px rgba(2, 6, 23, 0.035);
+            width: 286px !important;
+            min-width: 286px !important;
+            max-width: 286px !important;
+            border-right: 1px solid rgba(148,163,184,0.16);
+            box-shadow: none !important;
+            overflow-x: hidden !important;
+        }
+
+        [data-testid="stSidebar"] > div:first-child {
+            width: 286px !important;
+            min-width: 286px !important;
+            max-width: 286px !important;
         }
 
         [data-testid="stSidebar"] * {
             box-sizing: border-box;
+            max-width: 100%;
         }
 
         [data-testid="stSidebar"] [data-testid="stMarkdownContainer"],
@@ -400,131 +421,155 @@ st.markdown(
         }
 
         [data-testid="stSidebar"] [data-testid="stFileUploader"] {
-            margin-top: 0.70rem;
-            margin-bottom: 0.85rem;
+            margin-top: 0.65rem;
+            margin-bottom: 0.80rem;
         }
 
         [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
-            min-height: 96px;
-            border-radius: 13px !important;
+            min-height: 92px;
+            border-radius: 12px !important;
         }
 
-        /* ---------- Executive hero: single column, normal document flow ---------- */
-        /* No :has() parent positioning is used here. That removes browser/Streamlit
-           parent-layout side effects and guarantees the hero scrolls normally. */
+        @media (max-width: 900px) {
+            [data-testid="stSidebar"],
+            [data-testid="stSidebar"] > div:first-child {
+                width: min(286px, 86vw) !important;
+                min-width: min(286px, 86vw) !important;
+                max-width: min(286px, 86vw) !important;
+            }
+        }
 
+        /* ---------- Executive hero: flat, single-layer, overlap-proof ---------- */
         .hero-shell {
-            box-sizing: border-box;
-            width: 100%;
-            min-width: 0;
-            margin: 0 0 1.45rem 0;
-            padding: clamp(24px, 2.2vw, 36px) clamp(22px, 2.6vw, 42px);
-            border: 1px solid rgba(100, 116, 139, 0.28);
-            border-radius: 20px;
-            background: linear-gradient(120deg, #0b1220 0%, #111827 52%, #172033 100%);
-            box-shadow: 0 14px 34px rgba(2, 6, 23, 0.18);
-            overflow: visible;
+            box-sizing: border-box !important;
+            display: block !important;
+            position: relative !important;
+            isolation: isolate;
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            height: auto !important;
+            min-height: 0 !important;
+            margin: 0 0 1.10rem 0 !important;
+            padding: clamp(20px, 1.7vw, 28px) clamp(20px, 2.0vw, 32px) !important;
+            border: 1px solid #263247 !important;
+            border-left: 5px solid #6366f1 !important;
+            border-radius: 15px !important;
+            background: #0f172a !important;
+            background-color: #0f172a !important;
+            background-image: none !important;
+            box-shadow: 0 8px 20px rgba(2, 6, 23, 0.16) !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            overflow: hidden !important;
+            transform: none !important;
+            z-index: 0 !important;
+        }
+
+        /* Explicitly suppress decorative layers from older cached CSS versions. */
+        .hero-shell::before,
+        .hero-shell::after,
+        .hero-grid::before,
+        .hero-grid::after,
+        .hero-copy::before,
+        .hero-copy::after {
+            content: none !important;
+            display: none !important;
+            background: none !important;
         }
 
         .hero-grid,
         .hero-copy {
-            display: block;
-            width: 100%;
-            min-width: 0;
-            max-width: 100%;
-            position: static;
+            box-sizing: border-box !important;
+            display: block !important;
+            position: static !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            height: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            transform: none !important;
         }
 
         .hero-kicker,
         .hero-title,
         .hero-subtitle {
-            display: block;
+            box-sizing: border-box !important;
+            display: block !important;
             position: static !important;
             float: none !important;
-            clear: both;
-            width: 100%;
-            max-width: 100%;
+            clear: both !important;
+            width: 100% !important;
+            max-width: 100% !important;
             height: auto !important;
             min-height: 0 !important;
+            padding: 0 !important;
             margin-left: 0 !important;
             margin-right: 0 !important;
-            padding-left: 0 !important;
-            padding-right: 0 !important;
-            transform: none !important;
             white-space: normal !important;
-            word-break: normal;
-            overflow-wrap: anywhere;
+            overflow-wrap: break-word !important;
+            word-break: normal !important;
             overflow: visible !important;
             text-overflow: clip !important;
+            transform: none !important;
+            background: transparent !important;
         }
 
         .hero-kicker {
-            color: #a5b4fc;
-            font-size: clamp(0.64rem, 0.70vw, 0.76rem);
-            font-weight: 800;
-            line-height: 1.45 !important;
-            letter-spacing: 0.11em;
-            text-transform: uppercase;
+            color: #a5b4fc !important;
+            font-size: clamp(0.64rem, 0.67vw, 0.74rem) !important;
+            font-weight: 800 !important;
+            line-height: 1.35 !important;
+            letter-spacing: 0.10em !important;
+            text-transform: uppercase !important;
             margin-top: 0 !important;
-            margin-bottom: 14px !important;
+            margin-bottom: 9px !important;
         }
 
         .hero-title {
-            color: #f8fafc;
-            font-size: clamp(1.65rem, 2.35vw, 2.65rem);
-            font-weight: 900;
-            line-height: 1.16 !important;
-            letter-spacing: -0.025em;
+            color: #f8fafc !important;
+            font-size: clamp(1.55rem, 2.05vw, 2.35rem) !important;
+            font-weight: 900 !important;
+            line-height: 1.14 !important;
+            letter-spacing: -0.02em !important;
             margin-top: 0 !important;
-            margin-bottom: 18px !important;
+            margin-bottom: 12px !important;
         }
 
         .hero-subtitle {
-            max-width: 1180px;
-            color: #cbd5e1;
-            font-size: clamp(0.84rem, 0.95vw, 1.00rem);
-            font-weight: 500;
-            line-height: 1.65 !important;
+            color: #cbd5e1 !important;
+            font-size: clamp(0.82rem, 0.88vw, 0.96rem) !important;
+            font-weight: 500 !important;
+            line-height: 1.50 !important;
             margin-top: 0 !important;
             margin-bottom: 0 !important;
         }
 
         @media (max-width: 760px) {
             .hero-shell {
-                padding: 21px 18px 23px 18px;
-                border-radius: 16px;
-                margin-bottom: 1.15rem;
+                padding: 18px 16px 19px 16px !important;
+                border-left-width: 4px !important;
+                border-radius: 13px !important;
+                margin-bottom: 0.95rem !important;
             }
 
             .hero-kicker {
-                font-size: 0.62rem;
-                line-height: 1.45 !important;
-                margin-bottom: 11px !important;
+                font-size: 0.60rem !important;
+                margin-bottom: 8px !important;
             }
 
             .hero-title {
-                font-size: clamp(1.42rem, 7vw, 2.00rem);
-                line-height: 1.18 !important;
-                margin-bottom: 14px !important;
+                font-size: clamp(1.30rem, 6vw, 1.80rem) !important;
+                line-height: 1.16 !important;
+                margin-bottom: 10px !important;
             }
 
             .hero-subtitle {
-                font-size: 0.80rem;
-                line-height: 1.58 !important;
-            }
-        }
-
-        @media (max-width: 420px) {
-            .hero-shell {
-                padding: 18px 14px 20px 14px;
-            }
-
-            .hero-title {
-                font-size: 1.30rem;
-            }
-
-            .hero-subtitle {
-                font-size: 0.76rem;
+                font-size: 0.78rem !important;
+                line-height: 1.48 !important;
             }
         }
 
