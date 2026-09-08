@@ -2257,11 +2257,285 @@ else:
         st.plotly_chart(fig_class_a, use_container_width=True)
 
 
+
+# =========================================================
+# 10. CLASS A BRANCH RANKING — HIGH RISK + ZERO STOCKOUT
+# =========================================================
+st.markdown("<br>", unsafe_allow_html=True)
+section_heading(
+    "Class A Branch Stockout Ranking",
+    f"Top branch risks and zero-stockout leaders • {selected_area}",
+)
+
+TOP_BRANCH_LIMIT = 10
+
+# Use the active Network Scope. When "All Areas" is selected this ranks the
+# entire branch network; when one area is selected it ranks only that area's branches.
+branch_rank_source = area_data.copy()
+branch_rank_source["_normalized_class"] = (
+    branch_rank_source["pareto_class"]
+    .fillna("")
+    .astype(str)
+    .str.strip()
+    .str.casefold()
+)
+branch_rank_source["_normalized_status"] = (
+    branch_rank_source["stock_status"]
+    .fillna("")
+    .astype(str)
+    .str.strip()
+    .str.casefold()
+)
+branch_rank_source["branch"] = (
+    branch_rank_source["branch"].fillna("").astype(str).str.strip()
+)
+branch_rank_source["area"] = (
+    branch_rank_source["area"].fillna("").astype(str).str.strip()
+)
+
+branch_class_a = branch_rank_source[
+    branch_rank_source["_normalized_class"].eq("class a")
+    & branch_rank_source["branch"].ne("")
+].copy()
+
+if branch_class_a.empty:
+    st.info("No Class A branch records are available for the selected network scope.")
+else:
+    # One Class A row = one Class A stock-status record, matching the area KPI logic.
+    branch_class_a["_is_stockout"] = branch_class_a["_normalized_status"].eq(
+        "stockout"
+    ).astype(int)
+
+    branch_class_a_summary = (
+        branch_class_a.groupby(["area", "branch"], as_index=False, dropna=False)
+        .agg(
+            **{
+                "Class A Stock Out Count": ("_is_stockout", "sum"),
+                "Class A Total Stock Status Count": ("_is_stockout", "size"),
+            }
+        )
+    )
+
+    branch_class_a_summary["Class A Stock Out Rate"] = branch_class_a_summary.apply(
+        lambda row: round_half_up(
+            (
+                row["Class A Stock Out Count"]
+                / row["Class A Total Stock Status Count"]
+            )
+            * 100
+        )
+        if row["Class A Total Stock Status Count"] > 0
+        else 0,
+        axis=1,
+    )
+
+    # Add the area to labels only when the dashboard is showing the full network.
+    if selected_area == "All Areas":
+        branch_class_a_summary["Branch Display"] = (
+            branch_class_a_summary["branch"]
+            + "  •  "
+            + branch_class_a_summary["area"]
+        )
+    else:
+        branch_class_a_summary["Branch Display"] = branch_class_a_summary["branch"]
+
+    # Highest-risk branches: positive Class A OOS only, ranked descending.
+    high_class_a_branches = (
+        branch_class_a_summary[
+            branch_class_a_summary["Class A Stock Out Rate"] > 0
+        ]
+        .sort_values(
+            [
+                "Class A Stock Out Rate",
+                "Class A Stock Out Count",
+                "Class A Total Stock Status Count",
+                "branch",
+            ],
+            ascending=[False, False, False, True],
+        )
+        .head(TOP_BRANCH_LIMIT)
+        .reset_index(drop=True)
+    )
+
+    # Zero-stockout leaders: exactly 0% Class A OOS, ranked by Class A coverage count.
+    # The bar length uses coverage count because every qualifying OOS rate is 0%.
+    zero_class_a_branches = (
+        branch_class_a_summary[
+            branch_class_a_summary["Class A Stock Out Rate"] == 0
+        ]
+        .sort_values(
+            ["Class A Total Stock Status Count", "branch"],
+            ascending=[False, True],
+        )
+        .head(TOP_BRANCH_LIMIT)
+        .reset_index(drop=True)
+    )
+
+    high_rank_col, zero_rank_col = st.columns(2, gap="small")
+
+    with high_rank_col:
+        if high_class_a_branches.empty:
+            st.success("No branch has a Class A Stock Out Rate above 0% in this scope.")
+        else:
+            high_order = high_class_a_branches["Branch Display"].tolist()
+            high_rate_max = float(
+                high_class_a_branches["Class A Stock Out Rate"].max()
+            )
+
+            fig_high_class_a = px.bar(
+                high_class_a_branches,
+                x="Class A Stock Out Rate",
+                y="Branch Display",
+                orientation="h",
+                text="Class A Stock Out Rate",
+                template="plotly",
+                title=f"Top {len(high_class_a_branches)} Highest Class A Stock Out Rate",
+                custom_data=[
+                    "area",
+                    "branch",
+                    "Class A Stock Out Count",
+                    "Class A Total Stock Status Count",
+                ],
+            )
+
+            fig_high_class_a.update_traces(
+                marker_color="#f43f5e",
+                marker_line=dict(width=0),
+                opacity=0.94,
+                texttemplate="%{text:.0f}%",
+                textposition="outside",
+                cliponaxis=False,
+                hovertemplate=(
+                    "<b>%{customdata[1]}</b><br>"
+                    "Area: <b>%{customdata[0]}</b><br>"
+                    "Class A Stock Out Rate: <b>%{x:.0f}%</b><br>"
+                    "Class A Stock Out Count: <b>%{customdata[2]}</b><br>"
+                    "Class A Total Stock Status Count: <b>%{customdata[3]}</b>"
+                    "<extra></extra>"
+                ),
+            )
+
+            fig_high_class_a.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                height=max(410, 42 * len(high_class_a_branches) + 120),
+                margin=dict(t=68, b=46, l=24, r=46),
+                showlegend=False,
+                bargap=0.28,
+                title=dict(x=0.02, xanchor="left", font=dict(size=16)),
+                hoverlabel=dict(
+                    bgcolor="#0f172a",
+                    bordercolor="rgba(148,163,184,0.28)",
+                    font=dict(color="#f8fafc", size=11),
+                ),
+                xaxis=dict(
+                    title="Class A Stockout Rate",
+                    ticksuffix="%",
+                    range=[0, min(105, max(10, high_rate_max * 1.18))],
+                    gridcolor="rgba(148,163,184,0.14)",
+                    zeroline=False,
+                    automargin=True,
+                ),
+                yaxis=dict(
+                    title="",
+                    type="category",
+                    categoryorder="array",
+                    categoryarray=high_order,
+                    autorange="reversed",
+                    showgrid=False,
+                    automargin=True,
+                ),
+            )
+
+            st.plotly_chart(fig_high_class_a, use_container_width=True)
+
+    with zero_rank_col:
+        if zero_class_a_branches.empty:
+            st.warning("No branch currently has a 0% Class A Stock Out Rate in this scope.")
+        else:
+            zero_class_a_branches = zero_class_a_branches.copy()
+            zero_class_a_branches["Zero Rate Label"] = "0% OOS"
+            zero_order = zero_class_a_branches["Branch Display"].tolist()
+            zero_coverage_max = float(
+                zero_class_a_branches["Class A Total Stock Status Count"].max()
+            )
+
+            fig_zero_class_a = px.bar(
+                zero_class_a_branches,
+                x="Class A Total Stock Status Count",
+                y="Branch Display",
+                orientation="h",
+                text="Zero Rate Label",
+                template="plotly",
+                title=f"Top {len(zero_class_a_branches)} Branches with 0% Class A Stock Out Rate",
+                custom_data=[
+                    "area",
+                    "branch",
+                    "Class A Stock Out Rate",
+                    "Class A Stock Out Count",
+                    "Class A Total Stock Status Count",
+                ],
+            )
+
+            fig_zero_class_a.update_traces(
+                marker_color="#10b981",
+                marker_line=dict(width=0),
+                opacity=0.92,
+                textposition="outside",
+                cliponaxis=False,
+                hovertemplate=(
+                    "<b>%{customdata[1]}</b><br>"
+                    "Area: <b>%{customdata[0]}</b><br>"
+                    "Class A Stock Out Rate: <b>%{customdata[2]:.0f}%</b><br>"
+                    "Class A Stock Out Count: <b>%{customdata[3]}</b><br>"
+                    "Class A Total Stock Status Count: <b>%{customdata[4]}</b>"
+                    "<extra></extra>"
+                ),
+            )
+
+            fig_zero_class_a.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                height=max(410, 42 * len(zero_class_a_branches) + 120),
+                margin=dict(t=68, b=46, l=24, r=58),
+                showlegend=False,
+                bargap=0.28,
+                title=dict(x=0.02, xanchor="left", font=dict(size=16)),
+                hoverlabel=dict(
+                    bgcolor="#0f172a",
+                    bordercolor="rgba(148,163,184,0.28)",
+                    font=dict(color="#f8fafc", size=11),
+                ),
+                xaxis=dict(
+                    title="Class A Stock Status Coverage Count",
+                    range=[0, max(1, zero_coverage_max * 1.22)],
+                    gridcolor="rgba(148,163,184,0.14)",
+                    zeroline=False,
+                    automargin=True,
+                ),
+                yaxis=dict(
+                    title="",
+                    type="category",
+                    categoryorder="array",
+                    categoryarray=zero_order,
+                    autorange="reversed",
+                    showgrid=False,
+                    automargin=True,
+                ),
+            )
+
+            st.plotly_chart(fig_zero_class_a, use_container_width=True)
+            st.caption(
+                "Zero-stockout leaders are ranked by Class A stock-status coverage count; "
+                "every branch shown has exactly 0% Class A Stock Out Rate."
+            )
+
+
 st.markdown("---")
 
 
 # =========================================================
-# 10. BRANCH-LEVEL SECTION & PARETO TABLES
+# 11. BRANCH-LEVEL SECTION & PARETO TABLES
 # =========================================================
 section_heading(
     "Branch-Level Stockout Performance",
