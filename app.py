@@ -335,24 +335,32 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-        /* ---------- Global / collision-safe layout ---------- */
-        /*
-         * Do NOT force the main block to width:100% while the Streamlit sidebar is
-         * open. Streamlit already calculates the available main width. Leaving that
-         * calculation intact prevents the sidebar and dashboard from occupying the
-         * same visual space on desktop and at intermediate browser widths.
-         */
+        :root {
+            --scm-navy: #0b1220;
+            --scm-indigo: #6366f1;
+            --scm-blue: #0ea5e9;
+            --scm-green: #10b981;
+            --scm-amber: #f59e0b;
+            --scm-red: #f43f5e;
+            --scm-border: rgba(148, 163, 184, 0.18);
+            --scm-muted: #94a3b8;
+        }
+
+        /* FULL-WIDTH EXECUTIVE CANVAS */
+        html, body, [data-testid="stAppViewContainer"] {
+            overflow-x: hidden !important;
+        }
+
         .block-container,
         [data-testid="stMainBlockContainer"] {
             width: auto !important;
             max-width: none !important;
             min-width: 0 !important;
-            padding-top: 1.15rem !important;
-            padding-bottom: 2.75rem !important;
-            padding-left: clamp(1.00rem, 1.55vw, 1.75rem) !important;
-            padding-right: clamp(1.00rem, 1.55vw, 1.75rem) !important;
+            padding-top: 0.55rem !important;
+            padding-bottom: 2.25rem !important;
+            padding-left: clamp(0.22rem, 0.42vw, 0.48rem) !important;
+            padding-right: clamp(0.22rem, 0.42vw, 0.48rem) !important;
             margin: 0 !important;
-            overflow: visible !important;
         }
 
         section[data-testid="stMain"],
@@ -362,24 +370,38 @@ st.markdown(
             overflow-x: clip !important;
         }
 
-        @media (max-width: 900px) {
-            .block-container,
-            [data-testid="stMainBlockContainer"] {
-                padding-left: 0.75rem !important;
-                padding-right: 0.75rem !important;
-                padding-top: 0.85rem !important;
-            }
-        }
-
-        /* Executive dashboard canvas — calm, non-layered background */
         [data-testid="stAppViewContainer"] {
             background: var(--background-color);
         }
 
-        /* ---------- Sidebar control center ---------- */
+        @media (max-width: 900px) {
+            .block-container,
+            [data-testid="stMainBlockContainer"] {
+                padding-top: 0.42rem !important;
+                padding-left: 0.30rem !important;
+                padding-right: 0.30rem !important;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .block-container,
+            [data-testid="stMainBlockContainer"] {
+                padding-left: 0.22rem !important;
+                padding-right: 0.22rem !important;
+            }
+        }
+
+        /* COMPACT CONTROL CENTER */
         [data-testid="stSidebar"] {
-            border-right: 1px solid rgba(148,163,184,0.18);
-            box-shadow: 8px 0 28px rgba(2, 6, 23, 0.035);
+            width: 272px !important;
+            min-width: 272px !important;
+            border-right: 1px solid var(--scm-border);
+            box-shadow: 7px 0 24px rgba(2, 6, 23, 0.035);
+        }
+
+        [data-testid="stSidebar"] > div:first-child {
+            width: 272px !important;
+            min-width: 272px !important;
         }
 
         [data-testid="stSidebar"] * {
@@ -395,34 +417,33 @@ st.markdown(
         }
 
         [data-testid="stSidebar"] h2 {
-            line-height: 1.18 !important;
-            margin-bottom: 0.55rem !important;
+            font-size: 1.18rem !important;
+            line-height: 1.20 !important;
+            margin-bottom: 0.45rem !important;
         }
 
         [data-testid="stSidebar"] [data-testid="stFileUploader"] {
-            margin-top: 0.70rem;
-            margin-bottom: 0.85rem;
+            margin-top: 0.55rem;
+            margin-bottom: 0.70rem;
         }
 
         [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
-            min-height: 96px;
-            border-radius: 13px !important;
+            min-height: 86px;
+            border-radius: 12px !important;
         }
 
-        /* ---------- Executive hero: single column, normal document flow ---------- */
-        /* No :has() parent positioning is used here. That removes browser/Streamlit
-           parent-layout side effects and guarantees the hero scrolls normally. */
-
+        /* WORLD-CLASS EXECUTIVE HERO — ONE FLAT SURFACE */
         .hero-shell {
             box-sizing: border-box;
             width: 100%;
             min-width: 0;
-            margin: 0 0 1.45rem 0;
-            padding: clamp(24px, 2.2vw, 36px) clamp(22px, 2.6vw, 42px);
-            border: 1px solid rgba(100, 116, 139, 0.28);
-            border-radius: 20px;
-            background: linear-gradient(120deg, #0b1220 0%, #111827 52%, #172033 100%);
-            box-shadow: 0 14px 34px rgba(2, 6, 23, 0.18);
+            margin: 0.08rem 0 0.92rem 0;
+            padding: clamp(20px, 1.65vw, 28px) clamp(22px, 2.15vw, 34px);
+            border: 1px solid rgba(99, 102, 241, 0.34);
+            border-left: 4px solid var(--scm-indigo);
+            border-radius: 18px;
+            background: #0b1220;
+            box-shadow: 0 10px 28px rgba(2, 6, 23, 0.14);
             overflow: visible;
         }
 
@@ -432,7 +453,7 @@ st.markdown(
             width: 100%;
             min-width: 0;
             max-width: 100%;
-            position: static;
+            position: static !important;
         }
 
         .hero-kicker,
@@ -443,118 +464,97 @@ st.markdown(
             float: none !important;
             clear: both;
             width: 100%;
-            max-width: 100%;
             height: auto !important;
             min-height: 0 !important;
-            margin-left: 0 !important;
-            margin-right: 0 !important;
-            padding-left: 0 !important;
-            padding-right: 0 !important;
+            padding: 0 !important;
             transform: none !important;
             white-space: normal !important;
-            word-break: normal;
-            overflow-wrap: anywhere;
             overflow: visible !important;
             text-overflow: clip !important;
+            overflow-wrap: break-word;
+            word-break: normal;
         }
 
         .hero-kicker {
             color: #a5b4fc;
-            font-size: clamp(0.64rem, 0.70vw, 0.76rem);
-            font-weight: 800;
-            line-height: 1.45 !important;
-            letter-spacing: 0.11em;
+            font-size: clamp(0.62rem, 0.66vw, 0.72rem);
+            font-weight: 850;
+            line-height: 1.40 !important;
+            letter-spacing: 0.12em;
             text-transform: uppercase;
-            margin-top: 0 !important;
-            margin-bottom: 14px !important;
+            margin: 0 0 10px 0 !important;
         }
 
         .hero-title {
             color: #f8fafc;
-            font-size: clamp(1.65rem, 2.35vw, 2.65rem);
+            font-size: clamp(1.65rem, 2.10vw, 2.45rem);
             font-weight: 900;
-            line-height: 1.16 !important;
+            line-height: 1.13 !important;
             letter-spacing: -0.025em;
-            margin-top: 0 !important;
-            margin-bottom: 18px !important;
+            margin: 0 0 12px 0 !important;
         }
 
         .hero-subtitle {
             max-width: 1180px;
             color: #cbd5e1;
-            font-size: clamp(0.84rem, 0.95vw, 1.00rem);
+            font-size: clamp(0.80rem, 0.86vw, 0.94rem);
             font-weight: 500;
-            line-height: 1.65 !important;
-            margin-top: 0 !important;
-            margin-bottom: 0 !important;
+            line-height: 1.55 !important;
+            margin: 0 !important;
         }
 
         @media (max-width: 760px) {
             .hero-shell {
-                padding: 21px 18px 23px 18px;
-                border-radius: 16px;
-                margin-bottom: 1.15rem;
+                padding: 18px 16px 20px 18px;
+                border-radius: 15px;
+                margin-bottom: 0.82rem;
             }
 
             .hero-kicker {
-                font-size: 0.62rem;
-                line-height: 1.45 !important;
-                margin-bottom: 11px !important;
+                font-size: 0.60rem;
+                margin-bottom: 8px !important;
             }
 
             .hero-title {
-                font-size: clamp(1.42rem, 7vw, 2.00rem);
-                line-height: 1.18 !important;
-                margin-bottom: 14px !important;
+                font-size: clamp(1.35rem, 6.6vw, 1.90rem);
+                margin-bottom: 10px !important;
             }
 
             .hero-subtitle {
-                font-size: 0.80rem;
-                line-height: 1.58 !important;
+                font-size: 0.78rem;
+                line-height: 1.50 !important;
             }
         }
 
-        @media (max-width: 420px) {
-            .hero-shell {
-                padding: 18px 14px 20px 14px;
-            }
-
-            .hero-title {
-                font-size: 1.30rem;
-            }
-
-            .hero-subtitle {
-                font-size: 0.76rem;
-            }
-        }
-
-        /* ---------- Section labels ---------- */
+        /* SECTION HEADINGS */
         .section-heading {
             display: grid;
             grid-template-columns: auto minmax(0, 1fr) minmax(0, auto);
             align-items: center;
-            gap: 10px;
-            margin: 0.45rem 0 0.85rem 0;
+            gap: 9px;
             min-width: 0;
+            margin: 0.44rem 0 0.72rem 0;
+            padding: 0.18rem 0.12rem;
         }
 
         .section-heading .dot {
-            width: 10px;
-            height: 10px;
+            width: 9px;
+            height: 9px;
             border-radius: 50%;
-            background: #6366f1;
-            box-shadow: 0 0 0 5px rgba(99, 102, 241, 0.12);
+            background: var(--scm-indigo);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.11);
         }
 
         .section-heading .title {
-            font-size: 1.16rem;
-            font-weight: 850;
+            font-size: 1.12rem;
+            font-weight: 900;
+            letter-spacing: -0.012em;
         }
 
         .section-heading .subtitle {
-            color: #94a3b8;
-            font-size: 0.78rem;
-            margin-left: 0;
+            color: var(--scm-muted);
+            font-size: 0.75rem;
+            font-weight: 550;
             text-align: right;
             white-space: normal;
             overflow-wrap: anywhere;
@@ -569,24 +569,23 @@ st.markdown(
             .section-heading .subtitle {
                 grid-column: 2;
                 text-align: left;
-                font-size: 0.72rem;
+                font-size: 0.70rem;
             }
         }
 
-        /* ---------- KPI cards ---------- */
+        /* EXECUTIVE KPI CARDS */
         .metric-card,
         .metric-card-base {
             position: relative;
-            border: 1px solid rgba(148, 163, 184, 0.20);
-            border-radius: 16px;
-            padding: 17px 19px;
-            min-height: 126px;
-            background:
-                linear-gradient(145deg, rgba(255,255,255,0.045), rgba(99,102,241,0.035));
-            box-shadow:
-                0 10px 28px rgba(15, 23, 42, 0.065),
-                inset 0 1px 0 rgba(255,255,255,0.04);
-            transition: transform 160ms ease, box-shadow 160ms ease;
+            box-sizing: border-box;
+            min-width: 0;
+            min-height: 120px;
+            height: 100%;
+            padding: 15px 17px;
+            border: 1px solid var(--scm-border);
+            border-radius: 15px;
+            background: rgba(148, 163, 184, 0.025);
+            box-shadow: 0 7px 20px rgba(15, 23, 42, 0.045);
             overflow: hidden;
         }
 
@@ -598,112 +597,106 @@ st.markdown(
             top: 0;
             bottom: 0;
             width: 3px;
-            background: linear-gradient(#6366f1, #0ea5e9);
-            opacity: 0.85;
-        }
-
-        .metric-card:hover,
-        .metric-card-base:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 14px 34px rgba(15, 23, 42, 0.09);
+            background: var(--scm-indigo);
+            opacity: 0.90;
         }
 
         .metric-card-base {
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            height: 100%;
         }
 
         .metric-title,
         .metric-header {
-            color: #94a3b8;
-            font-size: 0.70rem;
-            font-weight: 800;
+            color: var(--scm-muted);
+            font-size: 0.67rem;
+            font-weight: 850;
             text-transform: uppercase;
-            letter-spacing: 0.08em;
+            letter-spacing: 0.075em;
         }
 
         .metric-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 8px;
         }
 
         .metric-value,
         .metric-value-sm {
-            font-size: 2rem;
+            font-size: clamp(1.72rem, 1.85vw, 2.05rem);
             font-weight: 900;
-            line-height: 1.1;
-            margin: 10px 0 6px 0;
+            line-height: 1.05;
+            margin: 9px 0 6px 0;
+            letter-spacing: -0.025em;
         }
 
         .metric-footnote {
-            color: #94a3b8;
-            font-size: 0.72rem;
+            color: var(--scm-muted);
+            font-size: 0.69rem;
+            line-height: 1.35;
         }
 
         .badge {
             display: inline-block;
             padding: 4px 8px;
             border-radius: 999px;
-            font-size: 0.62rem;
-            font-weight: 800;
+            font-size: 0.60rem;
+            font-weight: 850;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.045em;
         }
 
-        .badge-red { background: rgba(244, 63, 94, 0.14); color: #fb7185; }
-        .badge-yellow { background: rgba(234, 179, 8, 0.14); color: #facc15; }
-        .badge-green { background: rgba(16, 185, 129, 0.14); color: #34d399; }
-        .badge-blue { background: rgba(59, 130, 246, 0.14); color: #60a5fa; }
+        .badge-red { background: rgba(244, 63, 94, 0.12); color: #fb7185; }
+        .badge-yellow { background: rgba(245, 158, 11, 0.12); color: #fbbf24; }
+        .badge-green { background: rgba(16, 185, 129, 0.12); color: #34d399; }
+        .badge-blue { background: rgba(14, 165, 233, 0.12); color: #38bdf8; }
 
         .icon-box {
             display: flex;
             align-items: center;
             justify-content: center;
-            width: 30px;
-            height: 30px;
-            border-radius: 9px;
-            background: rgba(99, 102, 241, 0.10);
+            width: 28px;
+            height: 28px;
+            flex: 0 0 28px;
+            border-radius: 8px;
+            background: rgba(99, 102, 241, 0.09);
         }
 
-        /* ---------- Info chips ---------- */
-        .info-chip {
-            display: inline-block;
-            padding: 5px 9px;
-            border-radius: 999px;
-            border: 1px solid rgba(148, 163, 184, 0.25);
-            font-size: 0.70rem;
-            color: #94a3b8;
-            margin-right: 6px;
-            margin-bottom: 4px;
-        }
-
-        /* ---------- Dashboard utility cards ---------- */
+        /* STATUS / FILTER CHIPS */
         .status-strip {
             display: flex;
             flex-wrap: wrap;
             align-items: center;
-            gap: 8px;
-            margin: 0.65rem 0 0.25rem 0;
-            padding: 10px 12px;
-            border: 1px solid rgba(148,163,184,0.18);
-            border-radius: 13px;
-            background: rgba(15,23,42,0.025);
+            gap: 6px;
+            width: 100%;
+            min-width: 0;
+            margin: 0.45rem 0 0.12rem 0;
+            padding: 8px 10px;
+            border: 1px solid var(--scm-border);
+            border-radius: 12px;
+            background: rgba(148, 163, 184, 0.018);
         }
 
-        .status-pill {
+        .status-pill,
+        .info-chip {
             display: inline-flex;
             align-items: center;
-            gap: 6px;
-            padding: 5px 9px;
-            border: 1px solid rgba(148,163,184,0.20);
+            gap: 5px;
+            min-width: 0;
+            padding: 4px 8px;
+            border: 1px solid var(--scm-border);
             border-radius: 999px;
-            font-size: 0.70rem;
+            font-size: 0.67rem;
             font-weight: 700;
-            color: #94a3b8;
-            white-space: nowrap;
+            color: var(--scm-muted);
+            line-height: 1.25;
+        }
+
+        .info-chip {
+            margin-right: 5px;
+            margin-bottom: 4px;
         }
 
         .status-pill strong {
@@ -712,40 +705,68 @@ st.markdown(
         }
 
         .status-dot {
-            width: 7px;
-            height: 7px;
+            width: 6px;
+            height: 6px;
+            flex: 0 0 6px;
             border-radius: 50%;
-            background: #10b981;
-            box-shadow: 0 0 0 3px rgba(16,185,129,0.12);
+            background: var(--scm-green);
+            box-shadow: 0 0 0 3px rgba(16,185,129,0.10);
         }
 
+        /* STREAMLIT COMPONENTS / CHART CARDS */
         div[data-testid="stVerticalBlockBorderWrapper"] {
-            border-radius: 16px !important;
-            border-color: rgba(148,163,184,0.18) !important;
-            box-shadow: 0 8px 22px rgba(15,23,42,0.045);
-            background: rgba(255,255,255,0.012);
+            border-radius: 15px !important;
+            border-color: var(--scm-border) !important;
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.035);
+            background: rgba(148, 163, 184, 0.012);
+        }
+
+        div[data-testid="stVerticalBlockBorderWrapper"] > div {
+            min-width: 0 !important;
         }
 
         div[data-testid="stPlotlyChart"] {
-            border-radius: 14px;
+            width: 100% !important;
+            min-width: 0 !important;
+            border-radius: 13px;
             overflow: hidden;
         }
 
-        /* ---------- Pareto ---------- */
+        div[data-baseweb="select"] > div,
+        div[data-testid="stFileUploader"] section {
+            border-radius: 10px;
+        }
+
+        div[data-testid="stDataFrame"] {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+            border: 1px solid var(--scm-border);
+            border-radius: 11px;
+            overflow: hidden !important;
+        }
+
+        div[data-testid="stDataFrame"] > div {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+        }
+
+        /* PARETO ACTION PANELS */
         .pareto-panel-spacer {
-            height: 0.35rem;
+            height: 0.28rem;
         }
 
         .pareto-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 12px;
+            gap: 10px;
             width: 100%;
             min-width: 0;
-            padding: 0.70rem 0 0.62rem 0;
+            padding: 0.58rem 0 0.54rem 0;
             border-bottom: 2px solid;
-            margin-bottom: 0.75rem;
+            margin-bottom: 0.62rem;
         }
 
         .pareto-header > span:first-child {
@@ -756,45 +777,23 @@ st.markdown(
         .pareto-count {
             flex: 0 0 auto;
             white-space: nowrap;
-            border: 1px solid rgba(128,128,128,0.25);
-            padding: 4px 9px;
+            border: 1px solid rgba(128,128,128,0.22);
+            padding: 4px 8px;
             border-radius: 999px;
-            font-size: 0.72rem;
-            font-weight: 800;
+            font-size: 0.68rem;
+            font-weight: 850;
         }
 
-        /* Full-width Pareto tables: no browser-level horizontal scrolling. */
         .pareto-table-shell {
             width: 100%;
             min-width: 0;
             overflow: hidden;
         }
 
-        /* ---------- Streamlit controls ---------- */
-        div[data-baseweb="select"] > div,
-        div[data-testid="stFileUploader"] section {
-            border-radius: 10px;
-        }
-
-        div[data-testid="stDataFrame"] {
-            width: 100% !important;
-            min-width: 0 !important;
-            max-width: 100% !important;
-            border: 1px solid rgba(148, 163, 184, 0.18);
-            border-radius: 12px;
-            overflow: hidden !important;
-        }
-
-        div[data-testid="stDataFrame"] > div {
-            width: 100% !important;
-            max-width: 100% !important;
-            min-width: 0 !important;
-        }
-
         hr {
             border: none;
-            border-top: 1px solid rgba(148, 163, 184, 0.20);
-            margin: 1.4rem 0;
+            border-top: 1px solid var(--scm-border);
+            margin: 1.10rem 0;
         }
     </style>
     """,
@@ -808,13 +807,16 @@ st.markdown(
             <div class="hero-copy">
                 <div class="hero-kicker">Supply Chain Management • Executive Analytics</div>
                 <div class="hero-title">MUTI MC SCM Executive Control Tower</div>
-                <div class="hero-subtitle">Inventory visibility, Pareto risk prioritization, stockout trends, Days of Inventory, and branch-level action monitoring.</div>
+                <div class="hero-subtitle">
+                    Inventory visibility, Pareto risk prioritization, stockout trends, Days of Inventory, and branch-level action monitoring.
+                </div>
             </div>
         </div>
     </div>
     """,
     unsafe_allow_html=True,
 )
+
 
 # =========================================================
 # 3. DATA IMPORT & PROCESSING
@@ -1289,8 +1291,10 @@ def create_styled_line_chart(
         )
         fig.update_layout(
             template="plotly",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
             height=350,
-            margin=dict(t=75, b=35, l=45, r=25),
+            margin=dict(t=72, b=34, l=42, r=20),
             title=dict(
                 text=f"{title}<br><span style='font-size:10px'>{subtitle}</span>",
                 x=0.02,
@@ -1501,9 +1505,16 @@ def create_styled_line_chart(
 
     fig.update_layout(
         template="plotly",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
         height=365,
-        margin=dict(t=82, b=48, l=50, r=25),
+        margin=dict(t=82, b=44, l=46, r=20),
         hovermode="closest",
+        hoverlabel=dict(
+            bgcolor="#0f172a",
+            bordercolor="rgba(148,163,184,0.28)",
+            font=dict(color="#f8fafc", size=11),
+        ),
         showlegend=True,
         legend=dict(
             orientation="h",
@@ -1620,7 +1631,7 @@ section_heading(
     "YTD begins with January when January data exists • Weekly shows actual data dates only",
 )
 
-control_col1, control_col2, control_col3 = st.columns([1.6, 1.2, 3.2])
+control_col1, control_col2 = st.columns([1.35, 4.65], gap="small")
 
 with control_col1:
     timeframe = st.selectbox(
@@ -1632,9 +1643,7 @@ with control_col1:
 kpi_data = kpi_weekly if timeframe == "Weekly View" else kpi_ytd
 is_weekly = timeframe == "Weekly View"
 
-
-
-with control_col3:
+with control_col2:
     if not kpi_data.empty and kpi_data["period"].notna().any():
         latest_kpi_date = pd.to_datetime(kpi_data["period"], errors="coerce").max()
         latest_label = latest_kpi_date.strftime("%d %b %Y")
@@ -1643,7 +1652,7 @@ with control_col3:
 
     st.markdown(
         f"""
-        <div style='padding-top:30px;'>
+        <div style='padding-top:28px;'>
             <span class='info-chip'>View: {timeframe}</span>
             <span class='info-chip'>Latest KPI: {latest_label}</span>
             <span class='info-chip'>Actual data dates only</span>
@@ -1660,7 +1669,7 @@ with control_col3:
 # 5. Overall Before PO Balance
 # 6. Overall After PO Balance
 
-row1_left, row1_right = st.columns(2, gap="large")
+row1_left, row1_right = st.columns(2, gap="small")
 with row1_left:
     with st.container(border=True):
         st.plotly_chart(
@@ -1693,7 +1702,7 @@ with row1_right:
             use_container_width=True,
         )
 
-row2_left, row2_right = st.columns(2, gap="large")
+row2_left, row2_right = st.columns(2, gap="small")
 with row2_left:
     with st.container(border=True):
         st.plotly_chart(
@@ -1724,7 +1733,7 @@ with row2_right:
             use_container_width=True,
         )
 
-row3_left, row3_right = st.columns(2, gap="large")
+row3_left, row3_right = st.columns(2, gap="small")
 with row3_left:
     with st.container(border=True):
         st.plotly_chart(
@@ -1786,7 +1795,7 @@ with scope_col2:
 
     st.markdown(
         f"""
-        <div style='padding-top:30px;'>
+        <div style='padding-top:28px;'>
             <span class='info-chip'>Scope: {selected_area}</span>
             <span class='info-chip'>{active_branches} Branch(es)</span>
             <span class='info-chip'>{active_models} Model(s)</span>
@@ -1811,7 +1820,7 @@ section_heading(
     f"Current raw-data stockout profile • {selected_area}",
 )
 
-m1, m2, m3, m4 = st.columns(4, gap="medium")
+m1, m2, m3, m4 = st.columns(4, gap="small")
 m1.markdown(
     performance_card("Class A Rate", rate_a, "Highest-priority Pareto inventory"),
     unsafe_allow_html=True,
@@ -1876,6 +1885,7 @@ else:
     fig_bar.update_traces(
         marker_color="#6366f1",
         marker_line=dict(width=0),
+        opacity=0.92,
         texttemplate="%{text:.0f}%",
         textposition="outside",
         cliponaxis=False,
@@ -1888,10 +1898,17 @@ else:
 
     bar_max = area_rates_df["Average Stock Out Rate"].max()
     fig_bar.update_layout(
-        height=430,
-        margin=dict(t=34, b=70, l=48, r=32),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        height=425,
+        margin=dict(t=28, b=58, l=44, r=20),
         showlegend=False,
-        bargap=0.34,
+        bargap=0.28,
+        hoverlabel=dict(
+            bgcolor="#0f172a",
+            bordercolor="rgba(148,163,184,0.28)",
+            font=dict(color="#f8fafc", size=11),
+        ),
         xaxis=dict(
             title="",
             type="category",
@@ -1954,7 +1971,7 @@ br_rate_b = calculate_stockout_rate(branch_data, "Class B")
 br_rate_c = calculate_stockout_rate(branch_data, "Class C")
 br_avg = calculate_stockout_rate(branch_data)
 
-c1, c2, c3, c4 = st.columns(4, gap="medium")
+c1, c2, c3, c4 = st.columns(4, gap="small")
 c1.markdown(
     card_html(
         "BRANCH CLASS A RATE",
@@ -2083,5 +2100,5 @@ for pareto_class, pareto_color in [
 
 st.markdown("<br>", unsafe_allow_html=True)
 st.caption(
-    "SCM Executive Control Tower • Executive dashboard UI • Standard half-up rounding • January-aware YTD • Weekly actual-data dates only • Cloud persistence ready."
+    "SCM Executive Control Tower • Full-width executive UI • Half-up rounding • January-aware YTD • Weekly actual-data dates only • Cloud persistence ready."
 )
