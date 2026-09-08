@@ -639,6 +639,30 @@ st.markdown(
             line-height: 1.55 !important;
             margin: 0 !important;
         }
+        
+        /* DRP MODULE LINK BUTTON */
+        .drp-action-btn {
+            display: inline-flex;
+            align-items: center;
+            margin-top: 18px;
+            padding: 8px 18px;
+            background: rgba(99, 102, 241, 0.12);
+            color: #a5b4fc;
+            border: 1px solid rgba(99, 102, 241, 0.4);
+            border-radius: 8px;
+            font-size: 0.72rem;
+            font-weight: 850;
+            text-decoration: none;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            transition: all 0.2s ease;
+        }
+        .drp-action-btn:hover {
+            background: rgba(99, 102, 241, 0.25);
+            color: #ffffff;
+            border-color: rgba(99, 102, 241, 0.8);
+            transform: translateY(-1px);
+        }
 
         @media (max-width: 760px) {
             .hero-shell {
@@ -950,6 +974,9 @@ st.markdown(
                 <div class="hero-subtitle">
                     Inventory visibility, Pareto risk prioritization, stockout trends, Days of Inventory, and branch-level action monitoring.
                 </div>
+                <a href="https://scmdrp.streamlit.app/" target="_blank" class="drp-action-btn">
+                    Launch Delivery Requirements Plan (DRP) ↗
+                </a>
             </div>
         </div>
     </div>
@@ -2303,5 +2330,5 @@ for pareto_class, pareto_color in [
 
 st.markdown("<br>", unsafe_allow_html=True)
 st.caption(
-    "SCM Executive Control Tower  • Modal data import."
+    "SCM Executive Control Tower  • Modal data import. • [Access DRP Module](https://scmdrp.streamlit.app/)"
 )
