@@ -933,7 +933,7 @@ st.markdown(
             border-top: 1px solid var(--scm-border);
             margin: 1.10rem 0;
         }
-    </style>
+    </style><br>
     """,
     unsafe_allow_html=True,
 )
