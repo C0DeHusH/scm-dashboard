@@ -423,17 +423,24 @@ st.markdown(
             display: none !important;
         }
 
-        /* Import action beside MUTI MC Trends */
-        .trend-import-label {
+        /* Data Sync action beside MUTI MC Trends */
+        .data-sync-caption {
             display: block;
-            margin: 0 0 0.35rem 0;
+            margin: 0 0 0.28rem 0;
             color: var(--scm-muted);
-            font-size: 0.66rem;
+            font-size: 0.62rem;
             font-weight: 850;
             line-height: 1.2;
-            letter-spacing: 0.08em;
+            letter-spacing: 0.09em;
             text-transform: uppercase;
             text-align: right;
+            white-space: nowrap;
+        }
+
+        .data-sync-shell {
+            width: 100%;
+            min-width: 0;
+            padding-top: 0.02rem;
         }
 
         /* Streamlit buttons — executive treatment */
@@ -444,6 +451,24 @@ st.markdown(
             letter-spacing: 0.01em;
             border: 1px solid rgba(99, 102, 241, 0.34);
             box-shadow: 0 5px 14px rgba(15, 23, 42, 0.06);
+        }
+
+        /* The compact header action is intentionally stronger than ordinary buttons. */
+        div[data-testid="stHorizontalBlock"] > div:last-child div[data-testid="stButton"] > button {
+            min-height: 44px;
+            border-radius: 12px;
+            border: 1px solid rgba(99, 102, 241, 0.50);
+            background: linear-gradient(135deg, rgba(79,70,229,0.98), rgba(37,99,235,0.96));
+            color: #ffffff;
+            font-weight: 850;
+            box-shadow: 0 8px 20px rgba(37, 99, 235, 0.18);
+            transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease;
+        }
+
+        div[data-testid="stHorizontalBlock"] > div:last-child div[data-testid="stButton"] > button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 11px 24px rgba(37, 99, 235, 0.24);
+            filter: brightness(1.03);
         }
 
         /* Upload dialog */
@@ -537,7 +562,7 @@ st.markdown(
         }
 
         @media (max-width: 760px) {
-            .trend-import-label { text-align: left; }
+            .data-sync-caption { text-align: left; }
             .pareto-html-table { font-size: 0.69rem; }
             .pareto-html-table thead th,
             .pareto-html-table tbody td { padding: 0.48rem 0.38rem; }
@@ -1219,12 +1244,70 @@ def persist_uploaded_workbook(uploaded_bytes):
     return f"SCM workbook validated and saved to {destination_text}."
 
 
+@st.dialog("Data Sync", width="large")
+def data_sync_dialog():
+    st.markdown(
+        """
+        <div class="import-dialog-note">
+            Synchronize the latest SCM Excel workbook. The file is validated first and
+            only then replaces the active persistent dataset. Expected sheets:
+            <b>Raw_Data</b>, <b>KPI_YTD_Input</b>, and <b>KPI_Weekly_Input</b>.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    dialog_file = st.file_uploader(
+        "Select SCM Excel workbook",
+        type=["xlsx", "xls"],
+        help="Use a genuine Microsoft Excel workbook.",
+        key="scm_dialog_uploader",
+    )
+
+    if dialog_file is None:
+        st.caption("Choose a file, then click Validate & Sync.")
+        return
+
+    file_bytes = dialog_file.getvalue()
+    file_size_mb = len(file_bytes) / (1024 * 1024)
+    st.caption(f"Selected: {dialog_file.name} • {file_size_mb:.2f} MB")
+
+    action_col, info_col = st.columns([1.25, 2.75], gap="small")
+    with action_col:
+        do_import = st.button(
+            "Validate & Sync",
+            type="primary",
+            use_container_width=True,
+            key="scm_data_sync_confirm_button",
+        )
+    with info_col:
+        st.caption(
+            "The previous persisted workbook is retained if validation or cloud upload fails."
+        )
+
+    if do_import:
+        upload_hash = hashlib.sha256(file_bytes).hexdigest()
+        if st.session_state.get("scm_last_successful_upload_hash") == upload_hash:
+            st.info("This exact workbook is already the active dataset.")
+            return
+
+        try:
+            with st.spinner("Validating workbook and updating dashboard data..."):
+                success_message = persist_uploaded_workbook(file_bytes)
+        except Exception as exc:
+            st.error(f"Data Sync failed: {exc}")
+            return
+
+        st.session_state["scm_last_successful_upload_hash"] = upload_hash
+        st.session_state["scm_import_success"] = success_message
+        st.cache_data.clear()
+        st.rerun()
 
 
 # =========================================================
-# 4A. MUTI MC TRENDS HEADER + IMPORT BUTTON
+# 4A. MUTI MC TRENDS HEADER + DATA SYNC ACTION
 # =========================================================
-trend_title_col, trend_import_col = st.columns([5.15, 0.85], gap="small")
+trend_title_col, trend_sync_col = st.columns([5.45, 0.55], gap="small", vertical_alignment="center")
 
 with trend_title_col:
     st.markdown(
@@ -1238,18 +1321,19 @@ with trend_title_col:
         unsafe_allow_html=True,
     )
 
-with trend_import_col:
+with trend_sync_col:
     st.markdown(
-        '<span class="trend-import-label">Data Management</span>',
+        '<div class="data-sync-shell"><span class="data-sync-caption">Latest workbook</span></div>',
         unsafe_allow_html=True,
     )
     if st.button(
-        "Import SCM Data",
+        "Data Sync",
         type="primary",
         use_container_width=True,
-        key="open_scm_import_dialog",
+        key="open_scm_data_sync_dialog",
+        help="Validate and synchronize the latest SCM Excel workbook.",
     ):
-        import_scm_dialog()
+        data_sync_dialog()
 
 import_success = st.session_state.pop("scm_import_success", None)
 if import_success:
@@ -1266,7 +1350,7 @@ if st.session_state.get("scm_local_warning"):
 
 if saved_workbook_bytes is None:
     st.info(
-        "Click Import SCM Data beside MUTI MC Trends to upload your workbook. "
+        "Click Data Sync beside MUTI MC Trends to upload your workbook. "
         "For online deployment, configure Supabase secrets so the last uploaded workbook "
         "survives server restarts and redeployments."
     )
@@ -1285,65 +1369,6 @@ except Exception as e:
         "upload a valid workbook once to replace it."
     )
     st.stop()
-
-@st.dialog("Import SCM Data", width="large")
-def import_scm_dialog():
-    st.markdown(
-        """
-        <div class="import-dialog-note">
-            Upload the latest SCM Excel workbook. The file is validated first and
-            only then replaces the active persistent dataset. Expected sheets:
-            <b>Raw_Data</b>, <b>KPI_YTD_Input</b>, and <b>KPI_Weekly_Input</b>.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    dialog_file = st.file_uploader(
-        "Select SCM Excel workbook",
-        type=["xlsx", "xls"],
-        help="Use a genuine Microsoft Excel workbook.",
-        key="scm_dialog_uploader",
-    )
-
-    if dialog_file is None:
-        st.caption("Choose a file, then click Validate & Import.")
-        return
-
-    file_bytes = dialog_file.getvalue()
-    file_size_mb = len(file_bytes) / (1024 * 1024)
-    st.caption(f"Selected: {dialog_file.name} • {file_size_mb:.2f} MB")
-
-    action_col, info_col = st.columns([1.25, 2.75], gap="small")
-    with action_col:
-        do_import = st.button(
-            "Validate & Import",
-            type="primary",
-            use_container_width=True,
-            key="scm_dialog_import_button",
-        )
-    with info_col:
-        st.caption(
-            "The previous persisted workbook is retained if validation or cloud upload fails."
-        )
-
-    if do_import:
-        upload_hash = hashlib.sha256(file_bytes).hexdigest()
-        if st.session_state.get("scm_last_successful_upload_hash") == upload_hash:
-            st.info("This exact workbook is already the active dataset.")
-            return
-
-        try:
-            with st.spinner("Validating workbook and updating dashboard data..."):
-                success_message = persist_uploaded_workbook(file_bytes)
-        except Exception as exc:
-            st.error(f"Import failed: {exc}")
-            return
-
-        st.session_state["scm_last_successful_upload_hash"] = upload_hash
-        st.session_state["scm_import_success"] = success_message
-        st.cache_data.clear()
-        st.rerun()
 
 
 # =========================================================
@@ -1551,12 +1576,14 @@ def create_styled_line_chart(
     )
 
     # -----------------------------------------------------
-    # DIRECTION / TREND LINE
+    # DIRECTION / TREND GUIDE — POSITIONED ABOVE ACTUAL
     # -----------------------------------------------------
-    # A linear best-fit trend is drawn as a broken (dashed) line.
-    # It is calculated only from the dates that contain real KPI observations;
-    # no additional dates or data points are created.
+    # The linear fit determines direction only. For presentation clarity, the
+    # dashed guide is vertically repositioned into a dedicated band above the
+    # highest Actual observation. This guarantees that it never crosses or
+    # obscures the measured KPI line and avoids implying a second KPI value.
     trend_y = None
+    trend_direction = "Stable"
     if len(chart_df) >= 2:
         trend_x = (
             (chart_df["period"] - chart_df["period"].min())
@@ -1573,28 +1600,61 @@ def create_styled_line_chart(
                 trend_source_y[valid_trend],
                 1,
             )
-            trend_y = slope * trend_x + intercept
-            # Stockout percentages and DOI cannot be negative in this dashboard.
-            trend_y = np.maximum(trend_y, 0)
+            fitted_y = slope * trend_x + intercept
 
-            trend_hover = (
-                "Trend direction: <b>%{y:.0%}</b><extra></extra>"
-                if is_percentage
-                else "Trend direction: <b>%{y:,.0f}</b><extra></extra>"
-            )
+            actual_valid = trend_source_y[np.isfinite(trend_source_y)]
+            actual_max = float(np.nanmax(actual_valid))
+            actual_min = float(np.nanmin(actual_valid))
+            actual_span = max(actual_max - actual_min, 0.0)
+
+            # Minimum visual separation is unit-aware.
+            minimum_gap = 0.010 if is_percentage else 1.0
+            minimum_amplitude = 0.006 if is_percentage else 0.65
+            gap = max(actual_span * 0.18, minimum_gap)
+            amplitude = max(actual_span * 0.10, minimum_amplitude)
+
+            fitted_range = np.ptp(fitted_y[valid_trend])
+            if fitted_range > 0:
+                normalized_fit = (
+                    fitted_y - np.nanmin(fitted_y[valid_trend])
+                ) / fitted_range
+            else:
+                normalized_fit = np.full_like(fitted_y, 0.5, dtype=float)
+
+            # Entire dashed guide sits above the highest Actual point.
+            trend_y = actual_max + gap + (normalized_fit * amplitude)
+
+            fitted_delta = float(fitted_y[-1] - fitted_y[0])
+            flat_threshold = max(actual_span * 0.03, 0.001 if is_percentage else 0.10)
+            if fitted_delta > flat_threshold:
+                trend_direction = "Upward"
+            elif fitted_delta < -flat_threshold:
+                trend_direction = "Downward"
+            else:
+                trend_direction = "Stable"
+
+            direction_symbol = {
+                "Upward": "↑",
+                "Downward": "↓",
+                "Stable": "→",
+            }[trend_direction]
 
             fig.add_trace(
                 go.Scatter(
                     x=chart_x,
                     y=trend_y,
-                    name="Trend",
+                    name=f"Trend Direction {direction_symbol}",
                     mode="lines",
                     line=dict(
-                        width=2.2,
+                        width=2.4,
                         dash="dash",
-                        color="rgba(148,163,184,0.90)",
+                        color="rgba(100,116,139,0.95)",
                     ),
-                    hovertemplate=trend_hover,
+                    hovertemplate=(
+                        f"Trend direction: <b>{trend_direction} {direction_symbol}</b>"
+                        "<br><span style='font-size:10px'>Guide positioned above Actual for readability</span>"
+                        "<extra></extra>"
+                    ),
                     connectgaps=False,
                 )
             )
@@ -1607,7 +1667,9 @@ def create_styled_line_chart(
     if pd.isna(max_observed) or max_observed <= 0:
         y_max = default_ceiling
     else:
-        y_max = max_observed * 1.35
+        # Keep enough breathing room above the separated trend guide without
+        # compressing the Actual series excessively.
+        y_max = max_observed * 1.16
 
     if is_percentage:
         y_max = max(y_max, 0.05)
@@ -1671,7 +1733,7 @@ def create_styled_line_chart(
             text=(
                 f"{title}<br>"
                 f"<span style='font-size:10px; color:#94a3b8;'>"
-                f"{subtitle} • {len(chart_df)} DATA PERIOD(S) • LATEST {latest_text.upper()}"
+                f"{subtitle} • {len(chart_df)} DATA PERIOD(S) • LATEST {latest_text.upper()} • DASHED GUIDE ABOVE ACTUAL"
                 f"</span>"
             ),
             x=0.02,
