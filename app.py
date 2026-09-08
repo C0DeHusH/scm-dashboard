@@ -1315,7 +1315,7 @@ with trend_title_col:
         <div class="section-heading trend-heading-inline">
             <span class="dot"></span>
             <span class="title">MUTI MC Trends</span>
-            <span class="subtitle">YTD begins with January when January data exists • Weekly shows actual data dates only</span>
+            
         </div>
         """,
         unsafe_allow_html=True,
