@@ -335,37 +335,39 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-        /* ---------- Global ---------- */
-        /* Use virtually the full browser width for the executive dashboard. */
+        /* ---------- Global / collision-safe layout ---------- */
+        /*
+         * Do NOT force the main block to width:100% while the Streamlit sidebar is
+         * open. Streamlit already calculates the available main width. Leaving that
+         * calculation intact prevents the sidebar and dashboard from occupying the
+         * same visual space on desktop and at intermediate browser widths.
+         */
         .block-container,
         [data-testid="stMainBlockContainer"] {
-            width: 100% !important;
-            max-width: 100% !important;
-            padding-top: 0.85rem !important;
-            padding-bottom: 2.25rem !important;
-            padding-left: 0.70rem !important;
-            padding-right: 0.70rem !important;
-            margin-left: 0 !important;
-            margin-right: 0 !important;
+            width: auto !important;
+            max-width: none !important;
+            min-width: 0 !important;
+            padding-top: 1.15rem !important;
+            padding-bottom: 2.75rem !important;
+            padding-left: clamp(1.00rem, 1.55vw, 1.75rem) !important;
+            padding-right: clamp(1.00rem, 1.55vw, 1.75rem) !important;
+            margin: 0 !important;
+            overflow: visible !important;
         }
 
+        section[data-testid="stMain"],
         section[data-testid="stMain"] > div {
-            max-width: 100% !important;
-        }
-
-        @media (min-width: 1400px) {
-            .block-container,
-            [data-testid="stMainBlockContainer"] {
-                padding-left: 0.85rem !important;
-                padding-right: 0.85rem !important;
-            }
+            min-width: 0 !important;
+            max-width: none !important;
+            overflow-x: clip !important;
         }
 
         @media (max-width: 900px) {
             .block-container,
             [data-testid="stMainBlockContainer"] {
-                padding-left: 0.45rem !important;
-                padding-right: 0.45rem !important;
+                padding-left: 0.75rem !important;
+                padding-right: 0.75rem !important;
+                padding-top: 0.85rem !important;
             }
         }
 
@@ -376,30 +378,50 @@ st.markdown(
                 radial-gradient(circle at 92% 8%, rgba(14,165,233,0.045), transparent 26rem);
         }
 
+        /* ---------- Sidebar control center ---------- */
         [data-testid="stSidebar"] {
-            border-right: 1px solid rgba(148,163,184,0.16);
+            border-right: 1px solid rgba(148,163,184,0.18);
+            box-shadow: 8px 0 28px rgba(2, 6, 23, 0.035);
         }
 
-        /* ---------- Executive hero: clean single-column design ---------- */
-        /*
-         * The hero stays in normal document flow and uses a strict vertical
-         * layout. Title and subtitle have independent rows, so they cannot overlap.
-         */
-        div[data-testid="stElementContainer"]:has(.hero-shell),
-        div.element-container:has(.hero-shell) {
-            position: static !important;
-            inset: auto !important;
-            z-index: auto !important;
-            width: 100% !important;
-            margin: 0 0 0.95rem 0 !important;
-            overflow: visible !important;
+        [data-testid="stSidebar"] * {
+            box-sizing: border-box;
         }
+
+        [data-testid="stSidebar"] [data-testid="stMarkdownContainer"],
+        [data-testid="stSidebar"] p,
+        [data-testid="stSidebar"] li,
+        [data-testid="stSidebar"] span {
+            overflow-wrap: anywhere;
+            word-break: normal;
+        }
+
+        [data-testid="stSidebar"] h2 {
+            line-height: 1.18 !important;
+            margin-bottom: 0.55rem !important;
+        }
+
+        [data-testid="stSidebar"] [data-testid="stFileUploader"] {
+            margin-top: 0.70rem;
+            margin-bottom: 0.85rem;
+        }
+
+        [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
+            min-height: 96px;
+            border-radius: 13px !important;
+        }
+
+        /* ---------- Executive hero: single column, normal document flow ---------- */
+        /* No :has() parent positioning is used here. That removes browser/Streamlit
+           parent-layout side effects and guarantees the hero scrolls normally. */
 
         .hero-shell {
             position: relative;
             box-sizing: border-box;
             width: 100%;
             min-width: 0;
+            margin: 0 0 1.35rem 0;
+            isolation: isolate;
             overflow: hidden;
             border: 1px solid rgba(129, 140, 248, 0.28);
             border-radius: 22px;
@@ -450,13 +472,14 @@ st.markdown(
         .hero-copy {
             position: relative;
             z-index: 2;
-            display: grid;
-            grid-template-columns: minmax(0, 1fr);
-            grid-template-rows: auto auto auto;
-            row-gap: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: flex-start;
+            gap: 0;
             width: 100%;
             min-width: 0;
-            max-width: 1280px;
+            max-width: 1180px;
         }
 
         .hero-kicker,
@@ -504,24 +527,24 @@ st.markdown(
         .hero-title {
             display: block;
             color: #f8fafc;
-            font-size: clamp(1.55rem, 2.75vw, 2.85rem);
+            font-size: clamp(1.52rem, 2.35vw, 2.55rem);
             font-weight: 900;
-            line-height: 1.12 !important;
-            letter-spacing: -0.032em;
-            margin: 0 0 14px 0 !important;
+            line-height: 1.20 !important;
+            letter-spacing: -0.028em;
+            margin: 0 0 16px 0 !important;
             padding: 0 !important;
-            text-wrap: balance;
+            text-wrap: wrap;
         }
 
         .hero-subtitle {
             display: block;
             max-width: 1120px;
             color: #cbd5e1;
-            font-size: clamp(0.82rem, 1vw, 1rem);
+            font-size: clamp(0.82rem, 0.92vw, 0.98rem);
             font-weight: 500;
-            line-height: 1.65 !important;
+            line-height: 1.60 !important;
             margin: 0 !important;
-            padding: 0 !important;
+            padding: 0 0 2px 0 !important;
         }
 
         @media (max-width: 760px) {
@@ -1856,39 +1879,57 @@ area_rates_df = pd.DataFrame(area_rates)
 if area_rates_df.empty:
     st.info("No area-level stockout data available.")
 else:
+    # Vertical executive column chart: one bar per area.
+    # Sort highest risk first while keeping each area label fully visible.
     area_rates_df = area_rates_df.sort_values(
-        "Average Stock Out Rate", ascending=True
-    )
+        "Average Stock Out Rate", ascending=False
+    ).reset_index(drop=True)
 
     fig_bar = px.bar(
         area_rates_df,
-        x="Average Stock Out Rate",
-        y="Area",
-        orientation="h",
+        x="Area",
+        y="Average Stock Out Rate",
         text="Average Stock Out Rate",
         template="plotly",
     )
 
     fig_bar.update_traces(
         marker_color="#6366f1",
+        marker_line=dict(width=0),
         texttemplate="%{text:.0f}%",
         textposition="outside",
-        hovertemplate="<b>%{y}</b><br>Average Stock Out Rate: %{x:.0f}%<extra></extra>",
+        cliponaxis=False,
+        hovertemplate=(
+            "<b>%{x}</b><br>"
+            "Average Stock Out Rate: <b>%{y:.0f}%</b>"
+            "<extra></extra>"
+        ),
     )
 
     bar_max = area_rates_df["Average Stock Out Rate"].max()
     fig_bar.update_layout(
-        height=max(360, 55 * len(area_rates_df) + 90),
-        margin=dict(t=20, b=35, l=15, r=65),
+        height=430,
+        margin=dict(t=34, b=70, l=48, r=32),
         showlegend=False,
+        bargap=0.34,
         xaxis=dict(
+            title="",
+            type="category",
+            categoryorder="array",
+            categoryarray=area_rates_df["Area"].tolist(),
+            showgrid=False,
+            tickangle=0,
+            automargin=True,
+            linecolor="rgba(148,163,184,0.18)",
+        ),
+        yaxis=dict(
             title="Stockout Rate",
             ticksuffix="%",
-            range=[0, max(10, bar_max * 1.20)],
+            range=[0, max(10, bar_max * 1.24)],
             gridcolor="rgba(148,163,184,0.14)",
             zeroline=False,
+            automargin=True,
         ),
-        yaxis=dict(title="", showgrid=False),
     )
 
     st.plotly_chart(fig_bar, use_container_width=True)
