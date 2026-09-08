@@ -1332,74 +1332,6 @@ def data_sync_dialog():
         st.cache_data.clear()
         st.rerun()
 
-
-# =========================================================
-# 4A. MUTI MC TRENDS HEADER + DATA SYNC ACTION
-# =========================================================
-trend_title_col, trend_sync_col = st.columns([5.45, 0.55], gap="small", vertical_alignment="center")
-
-with trend_title_col:
-    st.markdown(
-        """
-        <div class="section-heading trend-heading-inline">
-            <span class="dot"></span>
-            <span class="title">MUTI MC Trends</span>
-            
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-with trend_sync_col:
-    st.markdown(
-        '<div class="data-sync-shell"><span class="data-sync-caption">Latest workbook</span></div>',
-        unsafe_allow_html=True,
-    )
-    if st.button(
-        "Data Sync",
-        type="primary",
-        use_container_width=True,
-        key="open_scm_data_sync_dialog",
-        help="Validate and synchronize the latest SCM Excel workbook.",
-    ):
-        data_sync_dialog()
-
-import_success = st.session_state.pop("scm_import_success", None)
-if import_success:
-    st.success(import_success)
-
-if st.session_state.get("scm_cloud_warning"):
-    with st.expander("Cloud storage connection notice"):
-        st.caption(st.session_state["scm_cloud_warning"])
-
-if st.session_state.get("scm_local_warning"):
-    with st.expander("Local workbook notice"):
-        st.caption(st.session_state["scm_local_warning"])
-
-
-if saved_workbook_bytes is None:
-    st.info(
-        "Click Data Sync beside MUTI MC Trends to upload your workbook. "
-        "For online deployment, configure Supabase secrets so the last uploaded workbook "
-        "survives server restarts and redeployments."
-    )
-    st.stop()
-
-try:
-    raw_data, kpi_ytd, kpi_weekly = process_excel_file(
-        io.BytesIO(saved_workbook_bytes)
-    )
-except Exception as e:
-    st.error(f"Import Failed: {e}")
-    st.info(
-        "Use a genuine Microsoft Excel .xlsx or .xls workbook. "
-        "For .xlsx, requirements.txt must include openpyxl; for legacy .xls, "
-        "it must include xlrd. If an older invalid workbook is stored in the cloud, "
-        "upload a valid workbook once to replace it."
-    )
-    st.stop()
-
-
 # =========================================================
 # 5. HELPERS
 # =========================================================
@@ -1807,917 +1739,1037 @@ def card_html(title, value, badge_text, color_theme, icon):
     </div>
     """
 
-
-
-# Executive operating-status strip
-all_kpi_dates = pd.concat(
-    [
-        kpi_ytd["period"] if "period" in kpi_ytd else pd.Series(dtype="datetime64[ns]"),
-        kpi_weekly["period"] if "period" in kpi_weekly else pd.Series(dtype="datetime64[ns]"),
-    ],
-    ignore_index=True,
-)
-all_kpi_dates = pd.to_datetime(all_kpi_dates, errors="coerce").dropna()
-dashboard_latest_date = (
-    all_kpi_dates.max().strftime("%d %b %Y")
-    if not all_kpi_dates.empty
-    else "No KPI date"
-)
-
-persistence_label = (
-    "Cloud persistent"
-    if storage_source == "Cloud • Supabase"
-    else "Local fallback"
-)
-
-st.markdown(
-    f"""
-
-    """,
-    unsafe_allow_html=True,
-)
-
-
 # =========================================================
-# 6. MUTI MC TRENDS — CONTROLS & CHARTS
+# INITIALIZE PRIMARY TABS
 # =========================================================
-st.markdown("<div style='height:0.15rem'></div>", unsafe_allow_html=True)
-control_col1, control_col2 = st.columns([1.35, 4.65], gap="small")
+tab_inventory, tab_procurements = st.tabs(["📊 Inventory Control Tower", "📦 Procurements"])
 
-with control_col1:
-    timeframe = st.selectbox(
-        "TIMEFRAME",
-        ["Year-to-Date (YTD)", "Weekly View"],
-        index=0,
+with tab_inventory:
+    # =========================================================
+    # 4A. MUTI MC TRENDS HEADER + DATA SYNC ACTION
+    # =========================================================
+    trend_title_col, trend_sync_col = st.columns([5.45, 0.55], gap="small", vertical_alignment="center")
+
+    with trend_title_col:
+        st.markdown(
+            """
+            <div class="section-heading trend-heading-inline">
+                <span class="dot"></span>
+                <span class="title">MUTI MC Trends</span>
+                
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with trend_sync_col:
+        st.markdown(
+            '<div class="data-sync-shell"><span class="data-sync-caption">Latest workbook</span></div>',
+            unsafe_allow_html=True,
+        )
+        if st.button(
+            "Data Sync",
+            type="primary",
+            use_container_width=True,
+            key="open_scm_data_sync_dialog",
+            help="Validate and synchronize the latest SCM Excel workbook.",
+        ):
+            data_sync_dialog()
+
+    import_success = st.session_state.pop("scm_import_success", None)
+    if import_success:
+        st.success(import_success)
+
+    if st.session_state.get("scm_cloud_warning"):
+        with st.expander("Cloud storage connection notice"):
+            st.caption(st.session_state["scm_cloud_warning"])
+
+    if st.session_state.get("scm_local_warning"):
+        with st.expander("Local workbook notice"):
+            st.caption(st.session_state["scm_local_warning"])
+
+
+    if saved_workbook_bytes is None:
+        st.info(
+            "Click Data Sync beside MUTI MC Trends to upload your workbook. "
+            "For online deployment, configure Supabase secrets so the last uploaded workbook "
+            "survives server restarts and redeployments."
+        )
+        st.stop()
+
+    try:
+        raw_data, kpi_ytd, kpi_weekly = process_excel_file(
+            io.BytesIO(saved_workbook_bytes)
+        )
+    except Exception as e:
+        st.error(f"Import Failed: {e}")
+        st.info(
+            "Use a genuine Microsoft Excel .xlsx or .xls workbook. "
+            "For .xlsx, requirements.txt must include openpyxl; for legacy .xls, "
+            "it must include xlrd. If an older invalid workbook is stored in the cloud, "
+            "upload a valid workbook once to replace it."
+        )
+        st.stop()
+
+    # Executive operating-status strip
+    all_kpi_dates = pd.concat(
+        [
+            kpi_ytd["period"] if "period" in kpi_ytd else pd.Series(dtype="datetime64[ns]"),
+            kpi_weekly["period"] if "period" in kpi_weekly else pd.Series(dtype="datetime64[ns]"),
+        ],
+        ignore_index=True,
+    )
+    all_kpi_dates = pd.to_datetime(all_kpi_dates, errors="coerce").dropna()
+    dashboard_latest_date = (
+        all_kpi_dates.max().strftime("%d %b %Y")
+        if not all_kpi_dates.empty
+        else "No KPI date"
     )
 
-kpi_data = kpi_weekly if timeframe == "Weekly View" else kpi_ytd
-is_weekly = timeframe == "Weekly View"
+    persistence_label = (
+        "Cloud persistent"
+        if storage_source == "Cloud • Supabase"
+        else "Local fallback"
+    )
 
-with control_col2:
-    if not kpi_data.empty and kpi_data["period"].notna().any():
-        latest_kpi_date = pd.to_datetime(kpi_data["period"], errors="coerce").max()
-        latest_label = latest_kpi_date.strftime("%d %b %Y")
+    st.markdown(
+        f"""
+
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # =========================================================
+    # 6. MUTI MC TRENDS — CONTROLS & CHARTS
+    # =========================================================
+    st.markdown("<div style='height:0.15rem'></div>", unsafe_allow_html=True)
+    control_col1, control_col2 = st.columns([1.35, 4.65], gap="small")
+
+    with control_col1:
+        timeframe = st.selectbox(
+            "TIMEFRAME",
+            ["Year-to-Date (YTD)", "Weekly View"],
+            index=0,
+        )
+
+    kpi_data = kpi_weekly if timeframe == "Weekly View" else kpi_ytd
+    is_weekly = timeframe == "Weekly View"
+
+    with control_col2:
+        if not kpi_data.empty and kpi_data["period"].notna().any():
+            latest_kpi_date = pd.to_datetime(kpi_data["period"], errors="coerce").max()
+            latest_label = latest_kpi_date.strftime("%d %b %Y")
+        else:
+            latest_label = "No KPI date"
+
+        st.markdown(
+            f"""
+            <div style='padding-top:28px;'>
+                <span class='info-chip'>View: {timeframe}</span>
+                <span class='info-chip'>Latest KPI: {latest_label}</span>
+                <span class='info-chip'>Actual data dates only</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    # Requested graph order:
+    # 1. MC Class A DoI
+    # 2. Days of Inventory
+    # 3. Per Branch OOS
+    # 4. Overall Class A Rate
+    # 5. Overall Before PO Balance
+    # 6. Overall After PO Balance
+
+    row1_left, row1_right = st.columns(2, gap="small")
+    with row1_left:
+        with st.container(border=True):
+            st.plotly_chart(
+                create_styled_line_chart(
+                kpi_data,
+                "class_a_doi",
+                "MC Class A DoI",
+                "CLASS A DAYS OF INVENTORY",
+                "#7c3aed",
+                is_weekly=is_weekly,
+                is_percentage=False,
+                fill=True,
+                ),
+                use_container_width=True,
+            )
+
+    with row1_right:
+        with st.container(border=True):
+            st.plotly_chart(
+                create_styled_line_chart(
+                kpi_data,
+                "overall_doi",
+                "Days of Inventory",
+                "OVERALL INVENTORY COVERAGE",
+                "#2563eb",
+                is_weekly=is_weekly,
+                is_percentage=False,
+                fill=True,
+                ),
+                use_container_width=True,
+            )
+
+    row2_left, row2_right = st.columns(2, gap="small")
+    with row2_left:
+        with st.container(border=True):
+            st.plotly_chart(
+                create_styled_line_chart(
+                kpi_data,
+                "per_branch",
+                "Per Branch OOS",
+                "STOCKOUT RATE",
+                "#0ea5e9",
+                is_weekly=is_weekly,
+                is_percentage=True,
+                ),
+                use_container_width=True,
+            )
+
+    with row2_right:
+        with st.container(border=True):
+            st.plotly_chart(
+                create_styled_line_chart(
+                kpi_data,
+                "class_a_out",
+                "Overall Class A Rate",
+                "CLASS A STOCKOUT RATE",
+                "#f43f5e",
+                is_weekly=is_weekly,
+                is_percentage=True,
+                ),
+                use_container_width=True,
+            )
+
+    row3_left, row3_right = st.columns(2, gap="small")
+    with row3_left:
+        with st.container(border=True):
+            st.plotly_chart(
+                create_styled_line_chart(
+                kpi_data,
+                "before_po",
+                "Overall Before PO Balance",
+                "STOCKOUT RATE BEFORE PO BALANCE",
+                "#f59e0b",
+                is_weekly=is_weekly,
+                is_percentage=True,
+                ),
+                use_container_width=True,
+            )
+
+    with row3_right:
+        with st.container(border=True):
+            st.plotly_chart(
+                create_styled_line_chart(
+                kpi_data,
+                "after_po",
+                "Overall After PO Balance",
+                "STOCKOUT RATE AFTER PO BALANCE",
+                "#10b981",
+                is_weekly=is_weekly,
+                is_percentage=True,
+                fill=True,
+                ),
+                use_container_width=True,
+            )
+
+    st.markdown("---")
+
+
+    # =========================================================
+    # 7. NETWORK SCOPE — MOVED BELOW MUTI MC TRENDS
+    # =========================================================
+    section_heading(
+        "Network Scope",
+        "Filter the operational view without changing the network-level trend history",
+    )
+
+    scope_col1, scope_col2 = st.columns([1.5, 3.5])
+
+    with scope_col1:
+        areas = ["All Areas"] + sorted(
+            [area for area in raw_data["area"].dropna().unique() if str(area).strip()]
+        )
+        selected_area = st.selectbox("NETWORK SCOPE", areas)
+
+    area_data = raw_data.copy()
+    if selected_area != "All Areas":
+        area_data = area_data[area_data["area"] == selected_area]
+
+    with scope_col2:
+        active_branches = area_data["branch"].replace("", np.nan).dropna().nunique()
+        active_models = area_data["model"].replace("", np.nan).dropna().nunique()
+        stock_records = len(area_data)
+
+        st.markdown(
+            f"""
+            <div style='padding-top:28px;'>
+                <span class='info-chip'>Scope: {selected_area}</span>
+                <span class='info-chip'>{active_branches} Branch(es)</span>
+                <span class='info-chip'>{active_models} Model(s)</span>
+                <span class='info-chip'>{stock_records:,} Stock Record(s)</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+    # =========================================================
+    # 8. PERFORMANCE OVERVIEW — MOVED BELOW TRENDS
+    # =========================================================
+    rate_a = calculate_stockout_rate(area_data, "Class A")
+    rate_b = calculate_stockout_rate(area_data, "Class B")
+    rate_c = calculate_stockout_rate(area_data, "Class C")
+    avg_rate = round_half_up((rate_a + rate_b + rate_c) / 3)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    section_heading(
+        "Performance Overview",
+        f"Current raw-data stockout profile • {selected_area}",
+    )
+
+    m1, m2, m3, m4 = st.columns(4, gap="small")
+    m1.markdown(
+        performance_card("Class A Rate", rate_a, "Highest-priority Pareto inventory"),
+        unsafe_allow_html=True,
+    )
+    m2.markdown(
+        performance_card("Class B Rate", rate_b, "Medium-priority Pareto inventory"),
+        unsafe_allow_html=True,
+    )
+    m3.markdown(
+        performance_card("Class C Rate", rate_c, "Lower-priority Pareto inventory"),
+        unsafe_allow_html=True,
+    )
+    m4.markdown(
+        performance_card("Average Rate", avg_rate, "Average of Class A, B and C rates"),
+        unsafe_allow_html=True,
+    )
+
+
+    # =========================================================
+    # 9. STOCK OUT RATE PER AREA — AVERAGE + CLASS A
+    # =========================================================
+    st.markdown("<br>", unsafe_allow_html=True)
+    section_heading(
+        "Stock Out Rate per Area",
+        "Average = mean of Class A/B/C rates • Class A = Class A Stock Out Count ÷ Class A Total Stock Status Count",
+    )
+
+    area_rates = []
+
+    # IMPORTANT: calculate every KPI independently PER AREA first.
+    # Example: AREA I uses only AREA I records; AREA II uses only AREA II records.
+    for area, a_df in raw_data.groupby("area", sort=True, dropna=True):
+        if not str(area).strip():
+            continue
+
+        a_df = a_df.copy()
+
+        # Existing Average Stock Out Rate logic is intentionally preserved,
+        # but it is calculated only from the current area's records.
+        avg_area_rate = round_half_up(
+            (
+                calculate_stockout_rate(a_df, "Class A")
+                + calculate_stockout_rate(a_df, "Class B")
+                + calculate_stockout_rate(a_df, "Class C")
+            )
+            / 3
+        )
+
+        # CLASS A STOCK OUT RATE — PER AREA
+        # Numerator   = Class A Stock Out Count in THIS AREA
+        # Denominator = Total Class A Stock Status Count in THIS AREA
+        # Formula     = Numerator / Denominator * 100
+        normalized_class = (
+            a_df["pareto_class"].fillna("").astype(str).str.strip().str.casefold()
+        )
+        class_a_df = a_df[normalized_class.eq("class a")].copy()
+
+        class_a_status = (
+            class_a_df["stock_status"]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+            .str.casefold()
+        )
+
+        class_a_stockout_count = int(class_a_status.eq("stockout").sum())
+        # Total Stock Status Count follows the dashboard logic: one Class A row = one
+        # Class A stock-status record for the current area.
+        class_a_total_stock_status_count = int(len(class_a_df))
+
+        class_a_area_rate = (
+            round_half_up(
+                (class_a_stockout_count / class_a_total_stock_status_count) * 100
+            )
+            if class_a_total_stock_status_count > 0
+            else 0
+        )
+
+        area_rates.append(
+            {
+                "Area": area,
+                "Average Stock Out Rate": avg_area_rate,
+                "Class A Stock Out Rate": class_a_area_rate,
+                "Class A Stock Out Count": class_a_stockout_count,
+                "Class A Total Stock Status Count": class_a_total_stock_status_count,
+            }
+        )
+
+    area_rates_df = pd.DataFrame(area_rates)
+
+    if area_rates_df.empty:
+        st.info("No area-level stockout data available.")
     else:
-        latest_label = "No KPI date"
+        # Keep one common area order so the two side-by-side charts are easy to compare.
+        area_rates_df = area_rates_df.sort_values(
+            "Average Stock Out Rate", ascending=False
+        ).reset_index(drop=True)
+        area_order = area_rates_df["Area"].tolist()
 
-    st.markdown(
-        f"""
-        <div style='padding-top:28px;'>
-            <span class='info-chip'>View: {timeframe}</span>
-            <span class='info-chip'>Latest KPI: {latest_label}</span>
-            <span class='info-chip'>Actual data dates only</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
+        avg_col, class_a_col = st.columns(2, gap="small")
+
+        with avg_col:
+            fig_bar = px.bar(
+                area_rates_df,
+                x="Area",
+                y="Average Stock Out Rate",
+                text="Average Stock Out Rate",
+                template="plotly",
+                title="Average Stock Out Rate per Area",
+            )
+
+            fig_bar.update_traces(
+                marker_color="#6366f1",
+                marker_line=dict(width=0),
+                opacity=0.92,
+                texttemplate="%{text:.0f}%",
+                textposition="outside",
+                cliponaxis=False,
+                hovertemplate=(
+                    "<b>%{x}</b><br>"
+                    "Average Stock Out Rate: <b>%{y:.0f}%</b>"
+                    "<extra></extra>"
+                ),
+            )
+
+            avg_bar_max = area_rates_df["Average Stock Out Rate"].max()
+            fig_bar.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                height=425,
+                margin=dict(t=62, b=58, l=44, r=20),
+                showlegend=False,
+                bargap=0.28,
+                title=dict(x=0.02, xanchor="left", font=dict(size=16)),
+                hoverlabel=dict(
+                    bgcolor="#0f172a",
+                    bordercolor="rgba(148,163,184,0.28)",
+                    font=dict(color="#f8fafc", size=11),
+                ),
+                xaxis=dict(
+                    title="",
+                    type="category",
+                    categoryorder="array",
+                    categoryarray=area_order,
+                    showgrid=False,
+                    tickangle=0,
+                    automargin=True,
+                    linecolor="rgba(148,163,184,0.18)",
+                ),
+                yaxis=dict(
+                    title="Stockout Rate",
+                    ticksuffix="%",
+                    range=[0, max(10, avg_bar_max * 1.24)],
+                    gridcolor="rgba(148,163,184,0.14)",
+                    zeroline=False,
+                    automargin=True,
+                ),
+            )
+
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+        with class_a_col:
+            fig_class_a = px.bar(
+                area_rates_df,
+                x="Area",
+                y="Class A Stock Out Rate",
+                text="Class A Stock Out Rate",
+                template="plotly",
+                title="Class A Stock Out Rate per Area",
+                custom_data=["Class A Stock Out Count", "Class A Total Stock Status Count"],
+            )
+
+            fig_class_a.update_traces(
+                marker_color="#f43f5e",
+                marker_line=dict(width=0),
+                opacity=0.92,
+                texttemplate="%{text:.0f}%",
+                textposition="outside",
+                cliponaxis=False,
+                hovertemplate=(
+                    "<b>%{x}</b><br>"
+                    "Class A Stock Out Rate: <b>%{y:.0f}%</b><br>"
+                    "Class A Stock Out Count: <b>%{customdata[0]}</b><br>"
+                    "Class A Total Stock Status Count: <b>%{customdata[1]}</b>"
+                    "<extra></extra>"
+                ),
+            )
+
+            class_a_bar_max = area_rates_df["Class A Stock Out Rate"].max()
+            fig_class_a.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                height=425,
+                margin=dict(t=62, b=58, l=44, r=20),
+                showlegend=False,
+                bargap=0.28,
+                title=dict(x=0.02, xanchor="left", font=dict(size=16)),
+                hoverlabel=dict(
+                    bgcolor="#0f172a",
+                    bordercolor="rgba(148,163,184,0.28)",
+                    font=dict(color="#f8fafc", size=11),
+                ),
+                xaxis=dict(
+                    title="",
+                    type="category",
+                    categoryorder="array",
+                    categoryarray=area_order,
+                    showgrid=False,
+                    tickangle=0,
+                    automargin=True,
+                    linecolor="rgba(148,163,184,0.18)",
+                ),
+                yaxis=dict(
+                    title="Class A Stockout Rate",
+                    ticksuffix="%",
+                    range=[0, max(10, class_a_bar_max * 1.24)],
+                    gridcolor="rgba(148,163,184,0.14)",
+                    zeroline=False,
+                    automargin=True,
+                ),
+            )
+
+            st.plotly_chart(fig_class_a, use_container_width=True)
+
+
+    # =========================================================
+    # 10. CLASS A BRANCH RANKING — HIGH RISK + ZERO STOCKOUT
+    # =========================================================
+    st.markdown("<br>", unsafe_allow_html=True)
+    section_heading(
+        "Class A Branch Stockout Ranking",
+        f"Top branch risks and zero-stockout leaders • {selected_area}",
     )
 
-# Requested graph order:
-# 1. MC Class A DoI
-# 2. Days of Inventory
-# 3. Per Branch OOS
-# 4. Overall Class A Rate
-# 5. Overall Before PO Balance
-# 6. Overall After PO Balance
+    TOP_BRANCH_LIMIT = 10
 
-row1_left, row1_right = st.columns(2, gap="small")
-with row1_left:
-    with st.container(border=True):
-        st.plotly_chart(
-            create_styled_line_chart(
-            kpi_data,
-            "class_a_doi",
-            "MC Class A DoI",
-            "CLASS A DAYS OF INVENTORY",
-            "#7c3aed",
-            is_weekly=is_weekly,
-            is_percentage=False,
-            fill=True,
-            ),
-            use_container_width=True,
-        )
-
-with row1_right:
-    with st.container(border=True):
-        st.plotly_chart(
-            create_styled_line_chart(
-            kpi_data,
-            "overall_doi",
-            "Days of Inventory",
-            "OVERALL INVENTORY COVERAGE",
-            "#2563eb",
-            is_weekly=is_weekly,
-            is_percentage=False,
-            fill=True,
-            ),
-            use_container_width=True,
-        )
-
-row2_left, row2_right = st.columns(2, gap="small")
-with row2_left:
-    with st.container(border=True):
-        st.plotly_chart(
-            create_styled_line_chart(
-            kpi_data,
-            "per_branch",
-            "Per Branch OOS",
-            "STOCKOUT RATE",
-            "#0ea5e9",
-            is_weekly=is_weekly,
-            is_percentage=True,
-            ),
-            use_container_width=True,
-        )
-
-with row2_right:
-    with st.container(border=True):
-        st.plotly_chart(
-            create_styled_line_chart(
-            kpi_data,
-            "class_a_out",
-            "Overall Class A Rate",
-            "CLASS A STOCKOUT RATE",
-            "#f43f5e",
-            is_weekly=is_weekly,
-            is_percentage=True,
-            ),
-            use_container_width=True,
-        )
-
-row3_left, row3_right = st.columns(2, gap="small")
-with row3_left:
-    with st.container(border=True):
-        st.plotly_chart(
-            create_styled_line_chart(
-            kpi_data,
-            "before_po",
-            "Overall Before PO Balance",
-            "STOCKOUT RATE BEFORE PO BALANCE",
-            "#f59e0b",
-            is_weekly=is_weekly,
-            is_percentage=True,
-            ),
-            use_container_width=True,
-        )
-
-with row3_right:
-    with st.container(border=True):
-        st.plotly_chart(
-            create_styled_line_chart(
-            kpi_data,
-            "after_po",
-            "Overall After PO Balance",
-            "STOCKOUT RATE AFTER PO BALANCE",
-            "#10b981",
-            is_weekly=is_weekly,
-            is_percentage=True,
-            fill=True,
-            ),
-            use_container_width=True,
-        )
-
-st.markdown("---")
-
-
-# =========================================================
-# 7. NETWORK SCOPE — MOVED BELOW MUTI MC TRENDS
-# =========================================================
-section_heading(
-    "Network Scope",
-    "Filter the operational view without changing the network-level trend history",
-)
-
-scope_col1, scope_col2 = st.columns([1.5, 3.5])
-
-with scope_col1:
-    areas = ["All Areas"] + sorted(
-        [area for area in raw_data["area"].dropna().unique() if str(area).strip()]
-    )
-    selected_area = st.selectbox("NETWORK SCOPE", areas)
-
-area_data = raw_data.copy()
-if selected_area != "All Areas":
-    area_data = area_data[area_data["area"] == selected_area]
-
-with scope_col2:
-    active_branches = area_data["branch"].replace("", np.nan).dropna().nunique()
-    active_models = area_data["model"].replace("", np.nan).dropna().nunique()
-    stock_records = len(area_data)
-
-    st.markdown(
-        f"""
-        <div style='padding-top:28px;'>
-            <span class='info-chip'>Scope: {selected_area}</span>
-            <span class='info-chip'>{active_branches} Branch(es)</span>
-            <span class='info-chip'>{active_models} Model(s)</span>
-            <span class='info-chip'>{stock_records:,} Stock Record(s)</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-# =========================================================
-# 8. PERFORMANCE OVERVIEW — MOVED BELOW TRENDS
-# =========================================================
-rate_a = calculate_stockout_rate(area_data, "Class A")
-rate_b = calculate_stockout_rate(area_data, "Class B")
-rate_c = calculate_stockout_rate(area_data, "Class C")
-avg_rate = round_half_up((rate_a + rate_b + rate_c) / 3)
-
-st.markdown("<br>", unsafe_allow_html=True)
-section_heading(
-    "Performance Overview",
-    f"Current raw-data stockout profile • {selected_area}",
-)
-
-m1, m2, m3, m4 = st.columns(4, gap="small")
-m1.markdown(
-    performance_card("Class A Rate", rate_a, "Highest-priority Pareto inventory"),
-    unsafe_allow_html=True,
-)
-m2.markdown(
-    performance_card("Class B Rate", rate_b, "Medium-priority Pareto inventory"),
-    unsafe_allow_html=True,
-)
-m3.markdown(
-    performance_card("Class C Rate", rate_c, "Lower-priority Pareto inventory"),
-    unsafe_allow_html=True,
-)
-m4.markdown(
-    performance_card("Average Rate", avg_rate, "Average of Class A, B and C rates"),
-    unsafe_allow_html=True,
-)
-
-
-# =========================================================
-# 9. STOCK OUT RATE PER AREA — AVERAGE + CLASS A
-# =========================================================
-st.markdown("<br>", unsafe_allow_html=True)
-section_heading(
-    "Stock Out Rate per Area",
-    "Average = mean of Class A/B/C rates • Class A = Class A Stock Out Count ÷ Class A Total Stock Status Count",
-)
-
-area_rates = []
-
-# IMPORTANT: calculate every KPI independently PER AREA first.
-# Example: AREA I uses only AREA I records; AREA II uses only AREA II records.
-for area, a_df in raw_data.groupby("area", sort=True, dropna=True):
-    if not str(area).strip():
-        continue
-
-    a_df = a_df.copy()
-
-    # Existing Average Stock Out Rate logic is intentionally preserved,
-    # but it is calculated only from the current area's records.
-    avg_area_rate = round_half_up(
-        (
-            calculate_stockout_rate(a_df, "Class A")
-            + calculate_stockout_rate(a_df, "Class B")
-            + calculate_stockout_rate(a_df, "Class C")
-        )
-        / 3
-    )
-
-    # CLASS A STOCK OUT RATE — PER AREA
-    # Numerator   = Class A Stock Out Count in THIS AREA
-    # Denominator = Total Class A Stock Status Count in THIS AREA
-    # Formula     = Numerator / Denominator * 100
-    normalized_class = (
-        a_df["pareto_class"].fillna("").astype(str).str.strip().str.casefold()
-    )
-    class_a_df = a_df[normalized_class.eq("class a")].copy()
-
-    class_a_status = (
-        class_a_df["stock_status"]
+    # Use the active Network Scope. When "All Areas" is selected this ranks the
+    # entire branch network; when one area is selected it ranks only that area's branches.
+    branch_rank_source = area_data.copy()
+    branch_rank_source["_normalized_class"] = (
+        branch_rank_source["pareto_class"]
         .fillna("")
         .astype(str)
         .str.strip()
         .str.casefold()
     )
-
-    class_a_stockout_count = int(class_a_status.eq("stockout").sum())
-    # Total Stock Status Count follows the dashboard logic: one Class A row = one
-    # Class A stock-status record for the current area.
-    class_a_total_stock_status_count = int(len(class_a_df))
-
-    class_a_area_rate = (
-        round_half_up(
-            (class_a_stockout_count / class_a_total_stock_status_count) * 100
-        )
-        if class_a_total_stock_status_count > 0
-        else 0
+    branch_rank_source["_normalized_status"] = (
+        branch_rank_source["stock_status"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .str.casefold()
+    )
+    branch_rank_source["branch"] = (
+        branch_rank_source["branch"].fillna("").astype(str).str.strip()
+    )
+    branch_rank_source["area"] = (
+        branch_rank_source["area"].fillna("").astype(str).str.strip()
     )
 
-    area_rates.append(
-        {
-            "Area": area,
-            "Average Stock Out Rate": avg_area_rate,
-            "Class A Stock Out Rate": class_a_area_rate,
-            "Class A Stock Out Count": class_a_stockout_count,
-            "Class A Total Stock Status Count": class_a_total_stock_status_count,
-        }
-    )
+    branch_class_a = branch_rank_source[
+        branch_rank_source["_normalized_class"].eq("class a")
+        & branch_rank_source["branch"].ne("")
+    ].copy()
 
-area_rates_df = pd.DataFrame(area_rates)
-
-if area_rates_df.empty:
-    st.info("No area-level stockout data available.")
-else:
-    # Keep one common area order so the two side-by-side charts are easy to compare.
-    area_rates_df = area_rates_df.sort_values(
-        "Average Stock Out Rate", ascending=False
-    ).reset_index(drop=True)
-    area_order = area_rates_df["Area"].tolist()
-
-    avg_col, class_a_col = st.columns(2, gap="small")
-
-    with avg_col:
-        fig_bar = px.bar(
-            area_rates_df,
-            x="Area",
-            y="Average Stock Out Rate",
-            text="Average Stock Out Rate",
-            template="plotly",
-            title="Average Stock Out Rate per Area",
-        )
-
-        fig_bar.update_traces(
-            marker_color="#6366f1",
-            marker_line=dict(width=0),
-            opacity=0.92,
-            texttemplate="%{text:.0f}%",
-            textposition="outside",
-            cliponaxis=False,
-            hovertemplate=(
-                "<b>%{x}</b><br>"
-                "Average Stock Out Rate: <b>%{y:.0f}%</b>"
-                "<extra></extra>"
-            ),
-        )
-
-        avg_bar_max = area_rates_df["Average Stock Out Rate"].max()
-        fig_bar.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            height=425,
-            margin=dict(t=62, b=58, l=44, r=20),
-            showlegend=False,
-            bargap=0.28,
-            title=dict(x=0.02, xanchor="left", font=dict(size=16)),
-            hoverlabel=dict(
-                bgcolor="#0f172a",
-                bordercolor="rgba(148,163,184,0.28)",
-                font=dict(color="#f8fafc", size=11),
-            ),
-            xaxis=dict(
-                title="",
-                type="category",
-                categoryorder="array",
-                categoryarray=area_order,
-                showgrid=False,
-                tickangle=0,
-                automargin=True,
-                linecolor="rgba(148,163,184,0.18)",
-            ),
-            yaxis=dict(
-                title="Stockout Rate",
-                ticksuffix="%",
-                range=[0, max(10, avg_bar_max * 1.24)],
-                gridcolor="rgba(148,163,184,0.14)",
-                zeroline=False,
-                automargin=True,
-            ),
-        )
-
-        st.plotly_chart(fig_bar, use_container_width=True)
-
-    with class_a_col:
-        fig_class_a = px.bar(
-            area_rates_df,
-            x="Area",
-            y="Class A Stock Out Rate",
-            text="Class A Stock Out Rate",
-            template="plotly",
-            title="Class A Stock Out Rate per Area",
-            custom_data=["Class A Stock Out Count", "Class A Total Stock Status Count"],
-        )
-
-        fig_class_a.update_traces(
-            marker_color="#f43f5e",
-            marker_line=dict(width=0),
-            opacity=0.92,
-            texttemplate="%{text:.0f}%",
-            textposition="outside",
-            cliponaxis=False,
-            hovertemplate=(
-                "<b>%{x}</b><br>"
-                "Class A Stock Out Rate: <b>%{y:.0f}%</b><br>"
-                "Class A Stock Out Count: <b>%{customdata[0]}</b><br>"
-                "Class A Total Stock Status Count: <b>%{customdata[1]}</b>"
-                "<extra></extra>"
-            ),
-        )
-
-        class_a_bar_max = area_rates_df["Class A Stock Out Rate"].max()
-        fig_class_a.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            height=425,
-            margin=dict(t=62, b=58, l=44, r=20),
-            showlegend=False,
-            bargap=0.28,
-            title=dict(x=0.02, xanchor="left", font=dict(size=16)),
-            hoverlabel=dict(
-                bgcolor="#0f172a",
-                bordercolor="rgba(148,163,184,0.28)",
-                font=dict(color="#f8fafc", size=11),
-            ),
-            xaxis=dict(
-                title="",
-                type="category",
-                categoryorder="array",
-                categoryarray=area_order,
-                showgrid=False,
-                tickangle=0,
-                automargin=True,
-                linecolor="rgba(148,163,184,0.18)",
-            ),
-            yaxis=dict(
-                title="Class A Stockout Rate",
-                ticksuffix="%",
-                range=[0, max(10, class_a_bar_max * 1.24)],
-                gridcolor="rgba(148,163,184,0.14)",
-                zeroline=False,
-                automargin=True,
-            ),
-        )
-
-        st.plotly_chart(fig_class_a, use_container_width=True)
-
-
-
-# =========================================================
-# 10. CLASS A BRANCH RANKING — HIGH RISK + ZERO STOCKOUT
-# =========================================================
-st.markdown("<br>", unsafe_allow_html=True)
-section_heading(
-    "Class A Branch Stockout Ranking",
-    f"Top branch risks and zero-stockout leaders • {selected_area}",
-)
-
-TOP_BRANCH_LIMIT = 10
-
-# Use the active Network Scope. When "All Areas" is selected this ranks the
-# entire branch network; when one area is selected it ranks only that area's branches.
-branch_rank_source = area_data.copy()
-branch_rank_source["_normalized_class"] = (
-    branch_rank_source["pareto_class"]
-    .fillna("")
-    .astype(str)
-    .str.strip()
-    .str.casefold()
-)
-branch_rank_source["_normalized_status"] = (
-    branch_rank_source["stock_status"]
-    .fillna("")
-    .astype(str)
-    .str.strip()
-    .str.casefold()
-)
-branch_rank_source["branch"] = (
-    branch_rank_source["branch"].fillna("").astype(str).str.strip()
-)
-branch_rank_source["area"] = (
-    branch_rank_source["area"].fillna("").astype(str).str.strip()
-)
-
-branch_class_a = branch_rank_source[
-    branch_rank_source["_normalized_class"].eq("class a")
-    & branch_rank_source["branch"].ne("")
-].copy()
-
-if branch_class_a.empty:
-    st.info("No Class A branch records are available for the selected network scope.")
-else:
-    # One Class A row = one Class A stock-status record, matching the area KPI logic.
-    branch_class_a["_is_stockout"] = branch_class_a["_normalized_status"].eq(
-        "stockout"
-    ).astype(int)
-
-    branch_class_a_summary = (
-        branch_class_a.groupby(["area", "branch"], as_index=False, dropna=False)
-        .agg(
-            **{
-                "Class A Stock Out Count": ("_is_stockout", "sum"),
-                "Class A Total Stock Status Count": ("_is_stockout", "size"),
-            }
-        )
-    )
-
-    branch_class_a_summary["Class A Stock Out Rate"] = branch_class_a_summary.apply(
-        lambda row: round_half_up(
-            (
-                row["Class A Stock Out Count"]
-                / row["Class A Total Stock Status Count"]
-            )
-            * 100
-        )
-        if row["Class A Total Stock Status Count"] > 0
-        else 0,
-        axis=1,
-    )
-
-    # Add the area to labels only when the dashboard is showing the full network.
-    if selected_area == "All Areas":
-        branch_class_a_summary["Branch Display"] = (
-            branch_class_a_summary["branch"]
-            + "  •  "
-            + branch_class_a_summary["area"]
-        )
+    if branch_class_a.empty:
+        st.info("No Class A branch records are available for the selected network scope.")
     else:
-        branch_class_a_summary["Branch Display"] = branch_class_a_summary["branch"]
+        # One Class A row = one Class A stock-status record, matching the area KPI logic.
+        branch_class_a["_is_stockout"] = branch_class_a["_normalized_status"].eq(
+            "stockout"
+        ).astype(int)
 
-    # Highest-risk branches: positive Class A OOS only, ranked descending.
-    high_class_a_branches = (
-        branch_class_a_summary[
-            branch_class_a_summary["Class A Stock Out Rate"] > 0
-        ]
-        .sort_values(
-            [
-                "Class A Stock Out Rate",
-                "Class A Stock Out Count",
-                "Class A Total Stock Status Count",
-                "branch",
-            ],
-            ascending=[False, False, False, True],
+        branch_class_a_summary = (
+            branch_class_a.groupby(["area", "branch"], as_index=False, dropna=False)
+            .agg(
+                **{
+                    "Class A Stock Out Count": ("_is_stockout", "sum"),
+                    "Class A Total Stock Status Count": ("_is_stockout", "size"),
+                }
+            )
         )
-        .head(TOP_BRANCH_LIMIT)
-        .reset_index(drop=True)
-    )
 
-    # Zero-stockout leaders: exactly 0% Class A OOS, ranked by Class A coverage count.
-    # The bar length uses coverage count because every qualifying OOS rate is 0%.
-    zero_class_a_branches = (
-        branch_class_a_summary[
-            branch_class_a_summary["Class A Stock Out Rate"] == 0
-        ]
-        .sort_values(
-            ["Class A Total Stock Status Count", "branch"],
-            ascending=[False, True],
+        branch_class_a_summary["Class A Stock Out Rate"] = branch_class_a_summary.apply(
+            lambda row: round_half_up(
+                (
+                    row["Class A Stock Out Count"]
+                    / row["Class A Total Stock Status Count"]
+                )
+                * 100
+            )
+            if row["Class A Total Stock Status Count"] > 0
+            else 0,
+            axis=1,
         )
-        .head(TOP_BRANCH_LIMIT)
-        .reset_index(drop=True)
-    )
 
-    high_rank_col, zero_rank_col = st.columns(2, gap="small")
-
-    with high_rank_col:
-        if high_class_a_branches.empty:
-            st.success("No branch has a Class A Stock Out Rate above 0% in this scope.")
+        # Add the area to labels only when the dashboard is showing the full network.
+        if selected_area == "All Areas":
+            branch_class_a_summary["Branch Display"] = (
+                branch_class_a_summary["branch"]
+                + "  •  "
+                + branch_class_a_summary["area"]
+            )
         else:
-            high_order = high_class_a_branches["Branch Display"].tolist()
-            high_rate_max = float(
-                high_class_a_branches["Class A Stock Out Rate"].max()
-            )
+            branch_class_a_summary["Branch Display"] = branch_class_a_summary["branch"]
 
-            fig_high_class_a = px.bar(
-                high_class_a_branches,
-                x="Class A Stock Out Rate",
-                y="Branch Display",
-                orientation="h",
-                text="Class A Stock Out Rate",
-                template="plotly",
-                title=f"Top {len(high_class_a_branches)} Highest Class A Stock Out Rate",
-                custom_data=[
-                    "area",
-                    "branch",
-                    "Class A Stock Out Count",
-                    "Class A Total Stock Status Count",
-                ],
-            )
-
-            fig_high_class_a.update_traces(
-                marker_color="#f43f5e",
-                marker_line=dict(width=0),
-                opacity=0.94,
-                texttemplate="%{text:.0f}%",
-                textposition="outside",
-                cliponaxis=False,
-                hovertemplate=(
-                    "<b>%{customdata[1]}</b><br>"
-                    "Area: <b>%{customdata[0]}</b><br>"
-                    "Class A Stock Out Rate: <b>%{x:.0f}%</b><br>"
-                    "Class A Stock Out Count: <b>%{customdata[2]}</b><br>"
-                    "Class A Total Stock Status Count: <b>%{customdata[3]}</b>"
-                    "<extra></extra>"
-                ),
-            )
-
-            fig_high_class_a.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                height=max(410, 42 * len(high_class_a_branches) + 120),
-                margin=dict(t=68, b=46, l=24, r=46),
-                showlegend=False,
-                bargap=0.28,
-                title=dict(x=0.02, xanchor="left", font=dict(size=16)),
-                hoverlabel=dict(
-                    bgcolor="#0f172a",
-                    bordercolor="rgba(148,163,184,0.28)",
-                    font=dict(color="#f8fafc", size=11),
-                ),
-                xaxis=dict(
-                    title="Class A Stockout Rate",
-                    ticksuffix="%",
-                    range=[0, min(105, max(10, high_rate_max * 1.18))],
-                    gridcolor="rgba(148,163,184,0.14)",
-                    zeroline=False,
-                    automargin=True,
-                ),
-                yaxis=dict(
-                    title="",
-                    type="category",
-                    categoryorder="array",
-                    categoryarray=high_order,
-                    autorange="reversed",
-                    showgrid=False,
-                    automargin=True,
-                ),
-            )
-
-            st.plotly_chart(fig_high_class_a, use_container_width=True)
-
-    with zero_rank_col:
-        if zero_class_a_branches.empty:
-            st.warning("No branch currently has a 0% Class A Stock Out Rate in this scope.")
-        else:
-            zero_class_a_branches = zero_class_a_branches.copy()
-            zero_class_a_branches["Zero Rate Label"] = "0% OOS"
-            zero_order = zero_class_a_branches["Branch Display"].tolist()
-            zero_coverage_max = float(
-                zero_class_a_branches["Class A Total Stock Status Count"].max()
-            )
-
-            fig_zero_class_a = px.bar(
-                zero_class_a_branches,
-                x="Class A Total Stock Status Count",
-                y="Branch Display",
-                orientation="h",
-                text="Zero Rate Label",
-                template="plotly",
-                title=f"Top {len(zero_class_a_branches)} Branches with 0% Class A Stock Out Rate",
-                custom_data=[
-                    "area",
-                    "branch",
+        # Highest-risk branches: positive Class A OOS only, ranked descending.
+        high_class_a_branches = (
+            branch_class_a_summary[
+                branch_class_a_summary["Class A Stock Out Rate"] > 0
+            ]
+            .sort_values(
+                [
                     "Class A Stock Out Rate",
                     "Class A Stock Out Count",
                     "Class A Total Stock Status Count",
+                    "branch",
                 ],
+                ascending=[False, False, False, True],
             )
-
-            fig_zero_class_a.update_traces(
-                marker_color="#10b981",
-                marker_line=dict(width=0),
-                opacity=0.92,
-                textposition="outside",
-                cliponaxis=False,
-                hovertemplate=(
-                    "<b>%{customdata[1]}</b><br>"
-                    "Area: <b>%{customdata[0]}</b><br>"
-                    "Class A Stock Out Rate: <b>%{customdata[2]:.0f}%</b><br>"
-                    "Class A Stock Out Count: <b>%{customdata[3]}</b><br>"
-                    "Class A Total Stock Status Count: <b>%{customdata[4]}</b>"
-                    "<extra></extra>"
-                ),
-            )
-
-            fig_zero_class_a.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                height=max(410, 42 * len(zero_class_a_branches) + 120),
-                margin=dict(t=68, b=46, l=24, r=58),
-                showlegend=False,
-                bargap=0.28,
-                title=dict(x=0.02, xanchor="left", font=dict(size=16)),
-                hoverlabel=dict(
-                    bgcolor="#0f172a",
-                    bordercolor="rgba(148,163,184,0.28)",
-                    font=dict(color="#f8fafc", size=11),
-                ),
-                xaxis=dict(
-                    title="Class A Stock Status Coverage Count",
-                    range=[0, max(1, zero_coverage_max * 1.22)],
-                    gridcolor="rgba(148,163,184,0.14)",
-                    zeroline=False,
-                    automargin=True,
-                ),
-                yaxis=dict(
-                    title="",
-                    type="category",
-                    categoryorder="array",
-                    categoryarray=zero_order,
-                    autorange="reversed",
-                    showgrid=False,
-                    automargin=True,
-                ),
-            )
-
-            st.plotly_chart(fig_zero_class_a, use_container_width=True)
-            st.caption(
-                "Zero-stockout leaders are ranked by Class A stock-status coverage count; "
-                "every branch shown has exactly 0% Class A Stock Out Rate."
-            )
-
-
-st.markdown("---")
-
-
-# =========================================================
-# 11. BRANCH-LEVEL SECTION & PARETO TABLES
-# =========================================================
-section_heading(
-    "Branch-Level Stockout Performance",
-    f"Operational drill-down • {selected_area}",
-)
-
-head_col1, head_col2 = st.columns([3.4, 1.6])
-
-with head_col1:
-    st.markdown(
-        "<div style='padding-top:12px; color:#94a3b8; font-size:0.82rem;'>"
-        "Select a branch to review stockout risk and Pareto action models."
-        "</div>",
-        unsafe_allow_html=True,
-    )
-
-with head_col2:
-    branch_options = ["All Branches"] + sorted(
-        [
-            branch
-            for branch in area_data["branch"].dropna().unique()
-            if str(branch).strip()
-        ]
-    )
-    selected_branch = st.selectbox("BRANCH", branch_options)
-
-branch_data = area_data.copy()
-if selected_branch != "All Branches":
-    branch_data = branch_data[branch_data["branch"] == selected_branch]
-
-br_rate_a = calculate_stockout_rate(branch_data, "Class A")
-br_rate_b = calculate_stockout_rate(branch_data, "Class B")
-br_rate_c = calculate_stockout_rate(branch_data, "Class C")
-br_avg = calculate_stockout_rate(branch_data)
-
-c1, c2, c3, c4 = st.columns(4, gap="small")
-c1.markdown(
-    card_html(
-        "BRANCH CLASS A RATE",
-        br_rate_a,
-        "HIGH PRIORITY RISK",
-        "red",
-        "A",
-    ),
-    unsafe_allow_html=True,
-)
-c2.markdown(
-    card_html(
-        "BRANCH CLASS B RATE",
-        br_rate_b,
-        "MEDIUM PRIORITY RISK",
-        "yellow",
-        "B",
-    ),
-    unsafe_allow_html=True,
-)
-c3.markdown(
-    card_html(
-        "BRANCH CLASS C RATE",
-        br_rate_c,
-        "LOW PRIORITY RISK",
-        "green",
-        "C",
-    ),
-    unsafe_allow_html=True,
-)
-c4.markdown(
-    card_html(
-        "BRANCH AVERAGE",
-        br_avg,
-        "PERFORMANCE INDEX",
-        "blue",
-        "Σ",
-    ),
-    unsafe_allow_html=True,
-)
-
-st.markdown("<br><br>", unsafe_allow_html=True)
-section_heading(
-    "Pareto Action Models",
-    f"Transfer priorities for {selected_branch}",
-)
-
-
-def render_pareto_table(df, pareto_class, hex_color):
-    class_df = df[df["pareto_class"] == pareto_class].copy()
-    item_count = len(class_df)
-
-    st.markdown(
-        f"""
-        <div class='pareto-header' style='border-color: {hex_color};'>
-            <span style='font-size:1.05rem; font-weight:900; color:{hex_color};'>
-                {pareto_class.upper()}
-            </span>
-            <span class='pareto-count' style='color:{hex_color};'>
-                ● {item_count} Items
-            </span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    if item_count == 0:
-        st.info(f"No {pareto_class} items active.")
-        return
-
-    class_df["remaining_inventory"] = (
-        round_series_half_up(class_df["remaining_inventory"]).astype(int)
-    )
-    class_df["suggested_transfer"] = (
-        round_series_half_up(class_df["suggested_transfer"]).astype(int)
-    )
-    class_df["doi"] = round_series_half_up(class_df["doi"]).astype(int)
-
-    class_df = class_df.sort_values(
-        by=["suggested_transfer", "doi"],
-        ascending=[False, True],
-    ).reset_index(drop=True)
-
-    class_df.index += 1
-    class_df = class_df.reset_index().rename(columns={"index": "Rank"})
-
-    display_cols = [
-        "Rank",
-        "model",
-        "stock_status",
-        "remaining_inventory",
-        "suggested_transfer",
-        "doi",
-    ]
-
-    final_df = class_df[display_cols].copy()
-    final_df.columns = ["Rank", "Model", "Status", "Inventory", "Transfer", "DOI"]
-
-    rows_html = []
-    for _, row in final_df.iterrows():
-        status_text = str(row["Status"])
-        status_class = " stockout" if status_text.strip().lower() == "stockout" else ""
-        rows_html.append(
-            "<tr>"
-            f"<td class='num'>{int(row['Rank'])}</td>"
-            f"<td>{html.escape(str(row['Model']))}</td>"
-            f"<td><span class='pareto-status{status_class}'>{html.escape(status_text)}</span></td>"
-            f"<td class='num'>{int(row['Inventory']):,}</td>"
-            f"<td class='num'>{int(row['Transfer']):,}</td>"
-            f"<td class='num'>{int(row['DOI']):,}</td>"
-            "</tr>"
+            .head(TOP_BRANCH_LIMIT)
+            .reset_index(drop=True)
         )
 
-    table_html = (
-        "<div class='pareto-html-shell'>"
-        "<table class='pareto-html-table'>"
-        "<colgroup>"
-        "<col style='width:7%'>"
-        "<col style='width:35%'>"
-        "<col style='width:16%'>"
-        "<col style='width:14%'>"
-        "<col style='width:14%'>"
-        "<col style='width:14%'>"
-        "</colgroup>"
-        "<thead><tr>"
-        "<th class='num'>Rank</th><th>Model</th><th>Status</th>"
-        "<th class='num'>Inventory</th><th class='num'>Transfer</th><th class='num'>DOI</th>"
-        "</tr></thead>"
-        "<tbody>" + "".join(rows_html) + "</tbody>"
-        "</table></div>"
+        # Zero-stockout leaders: exactly 0% Class A OOS, ranked by Class A coverage count.
+        # The bar length uses coverage count because every qualifying OOS rate is 0%.
+        zero_class_a_branches = (
+            branch_class_a_summary[
+                branch_class_a_summary["Class A Stock Out Rate"] == 0
+            ]
+            .sort_values(
+                ["Class A Total Stock Status Count", "branch"],
+                ascending=[False, True],
+            )
+            .head(TOP_BRANCH_LIMIT)
+            .reset_index(drop=True)
+        )
+
+        high_rank_col, zero_rank_col = st.columns(2, gap="small")
+
+        with high_rank_col:
+            if high_class_a_branches.empty:
+                st.success("No branch has a Class A Stock Out Rate above 0% in this scope.")
+            else:
+                high_order = high_class_a_branches["Branch Display"].tolist()
+                high_rate_max = float(
+                    high_class_a_branches["Class A Stock Out Rate"].max()
+                )
+
+                fig_high_class_a = px.bar(
+                    high_class_a_branches,
+                    x="Class A Stock Out Rate",
+                    y="Branch Display",
+                    orientation="h",
+                    text="Class A Stock Out Rate",
+                    template="plotly",
+                    title=f"Top {len(high_class_a_branches)} Highest Class A Stock Out Rate",
+                    custom_data=[
+                        "area",
+                        "branch",
+                        "Class A Stock Out Count",
+                        "Class A Total Stock Status Count",
+                    ],
+                )
+
+                fig_high_class_a.update_traces(
+                    marker_color="#f43f5e",
+                    marker_line=dict(width=0),
+                    opacity=0.94,
+                    texttemplate="%{text:.0f}%",
+                    textposition="outside",
+                    cliponaxis=False,
+                    hovertemplate=(
+                        "<b>%{customdata[1]}</b><br>"
+                        "Area: <b>%{customdata[0]}</b><br>"
+                        "Class A Stock Out Rate: <b>%{x:.0f}%</b><br>"
+                        "Class A Stock Out Count: <b>%{customdata[2]}</b><br>"
+                        "Class A Total Stock Status Count: <b>%{customdata[3]}</b>"
+                        "<extra></extra>"
+                    ),
+                )
+
+                fig_high_class_a.update_layout(
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    height=max(410, 42 * len(high_class_a_branches) + 120),
+                    margin=dict(t=68, b=46, l=24, r=46),
+                    showlegend=False,
+                    bargap=0.28,
+                    title=dict(x=0.02, xanchor="left", font=dict(size=16)),
+                    hoverlabel=dict(
+                        bgcolor="#0f172a",
+                        bordercolor="rgba(148,163,184,0.28)",
+                        font=dict(color="#f8fafc", size=11),
+                    ),
+                    xaxis=dict(
+                        title="Class A Stockout Rate",
+                        ticksuffix="%",
+                        range=[0, min(105, max(10, high_rate_max * 1.18))],
+                        gridcolor="rgba(148,163,184,0.14)",
+                        zeroline=False,
+                        automargin=True,
+                    ),
+                    yaxis=dict(
+                        title="",
+                        type="category",
+                        categoryorder="array",
+                        categoryarray=high_order,
+                        autorange="reversed",
+                        showgrid=False,
+                        automargin=True,
+                    ),
+                )
+
+                st.plotly_chart(fig_high_class_a, use_container_width=True)
+
+        with zero_rank_col:
+            if zero_class_a_branches.empty:
+                st.warning("No branch currently has a 0% Class A Stock Out Rate in this scope.")
+            else:
+                zero_class_a_branches = zero_class_a_branches.copy()
+                zero_class_a_branches["Zero Rate Label"] = "0% OOS"
+                zero_order = zero_class_a_branches["Branch Display"].tolist()
+                zero_coverage_max = float(
+                    zero_class_a_branches["Class A Total Stock Status Count"].max()
+                )
+
+                fig_zero_class_a = px.bar(
+                    zero_class_a_branches,
+                    x="Class A Total Stock Status Count",
+                    y="Branch Display",
+                    orientation="h",
+                    text="Zero Rate Label",
+                    template="plotly",
+                    title=f"Top {len(zero_class_a_branches)} Branches with 0% Class A Stock Out Rate",
+                    custom_data=[
+                        "area",
+                        "branch",
+                        "Class A Stock Out Rate",
+                        "Class A Stock Out Count",
+                        "Class A Total Stock Status Count",
+                    ],
+                )
+
+                fig_zero_class_a.update_traces(
+                    marker_color="#10b981",
+                    marker_line=dict(width=0),
+                    opacity=0.92,
+                    textposition="outside",
+                    cliponaxis=False,
+                    hovertemplate=(
+                        "<b>%{customdata[1]}</b><br>"
+                        "Area: <b>%{customdata[0]}</b><br>"
+                        "Class A Stock Out Rate: <b>%{customdata[2]:.0f}%</b><br>"
+                        "Class A Stock Out Count: <b>%{customdata[3]}</b><br>"
+                        "Class A Total Stock Status Count: <b>%{customdata[4]}</b>"
+                        "<extra></extra>"
+                    ),
+                )
+
+                fig_zero_class_a.update_layout(
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    height=max(410, 42 * len(zero_class_a_branches) + 120),
+                    margin=dict(t=68, b=46, l=24, r=58),
+                    showlegend=False,
+                    bargap=0.28,
+                    title=dict(x=0.02, xanchor="left", font=dict(size=16)),
+                    hoverlabel=dict(
+                        bgcolor="#0f172a",
+                        bordercolor="rgba(148,163,184,0.28)",
+                        font=dict(color="#f8fafc", size=11),
+                    ),
+                    xaxis=dict(
+                        title="Class A Stock Status Coverage Count",
+                        range=[0, max(1, zero_coverage_max * 1.22)],
+                        gridcolor="rgba(148,163,184,0.14)",
+                        zeroline=False,
+                        automargin=True,
+                    ),
+                    yaxis=dict(
+                        title="",
+                        type="category",
+                        categoryorder="array",
+                        categoryarray=zero_order,
+                        autorange="reversed",
+                        showgrid=False,
+                        automargin=True,
+                    ),
+                )
+
+                st.plotly_chart(fig_zero_class_a, use_container_width=True)
+                st.caption(
+                    "Zero-stockout leaders are ranked by Class A stock-status coverage count; "
+                    "every branch shown has exactly 0% Class A Stock Out Rate."
+                )
+
+
+    st.markdown("---")
+
+
+    # =========================================================
+    # 11. BRANCH-LEVEL SECTION & PARETO TABLES
+    # =========================================================
+    section_heading(
+        "Branch-Level Stockout Performance",
+        f"Operational drill-down • {selected_area}",
     )
-    st.markdown(table_html, unsafe_allow_html=True)
+
+    head_col1, head_col2 = st.columns([3.4, 1.6])
+
+    with head_col1:
+        st.markdown(
+            "<div style='padding-top:12px; color:#94a3b8; font-size:0.82rem;'>"
+            "Select a branch to review stockout risk and Pareto action models."
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+    with head_col2:
+        branch_options = ["All Branches"] + sorted(
+            [
+                branch
+                for branch in area_data["branch"].dropna().unique()
+                if str(branch).strip()
+            ]
+        )
+        selected_branch = st.selectbox("BRANCH", branch_options)
+
+    branch_data = area_data.copy()
+    if selected_branch != "All Branches":
+        branch_data = branch_data[branch_data["branch"] == selected_branch]
+
+    br_rate_a = calculate_stockout_rate(branch_data, "Class A")
+    br_rate_b = calculate_stockout_rate(branch_data, "Class B")
+    br_rate_c = calculate_stockout_rate(branch_data, "Class C")
+    br_avg = calculate_stockout_rate(branch_data)
+
+    c1, c2, c3, c4 = st.columns(4, gap="small")
+    c1.markdown(
+        card_html(
+            "BRANCH CLASS A RATE",
+            br_rate_a,
+            "HIGH PRIORITY RISK",
+            "red",
+            "A",
+        ),
+        unsafe_allow_html=True,
+    )
+    c2.markdown(
+        card_html(
+            "BRANCH CLASS B RATE",
+            br_rate_b,
+            "MEDIUM PRIORITY RISK",
+            "yellow",
+            "B",
+        ),
+        unsafe_allow_html=True,
+    )
+    c3.markdown(
+        card_html(
+            "BRANCH CLASS C RATE",
+            br_rate_c,
+            "LOW PRIORITY RISK",
+            "green",
+            "C",
+        ),
+        unsafe_allow_html=True,
+    )
+    c4.markdown(
+        card_html(
+            "BRANCH AVERAGE",
+            br_avg,
+            "PERFORMANCE INDEX",
+            "blue",
+            "Σ",
+        ),
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    section_heading(
+        "Pareto Action Models",
+        f"Transfer priorities for {selected_branch}",
+    )
+
+    def render_pareto_table(df, pareto_class, hex_color):
+        class_df = df[df["pareto_class"] == pareto_class].copy()
+        item_count = len(class_df)
+
+        st.markdown(
+            f"""
+            <div class='pareto-header' style='border-color: {hex_color};'>
+                <span style='font-size:1.05rem; font-weight:900; color:{hex_color};'>
+                    {pareto_class.upper()}
+                </span>
+                <span class='pareto-count' style='color:{hex_color};'>
+                    ● {item_count} Items
+                </span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        if item_count == 0:
+            st.info(f"No {pareto_class} items active.")
+            return
+
+        class_df["remaining_inventory"] = (
+            round_series_half_up(class_df["remaining_inventory"]).astype(int)
+        )
+        class_df["suggested_transfer"] = (
+            round_series_half_up(class_df["suggested_transfer"]).astype(int)
+        )
+        class_df["doi"] = round_series_half_up(class_df["doi"]).astype(int)
+
+        class_df = class_df.sort_values(
+            by=["suggested_transfer", "doi"],
+            ascending=[False, True],
+        ).reset_index(drop=True)
+
+        class_df.index += 1
+        class_df = class_df.reset_index().rename(columns={"index": "Rank"})
+
+        display_cols = [
+            "Rank",
+            "model",
+            "stock_status",
+            "remaining_inventory",
+            "suggested_transfer",
+            "doi",
+        ]
+
+        final_df = class_df[display_cols].copy()
+        final_df.columns = ["Rank", "Model", "Status", "Inventory", "Transfer", "DOI"]
+
+        rows_html = []
+        for _, row in final_df.iterrows():
+            status_text = str(row["Status"])
+            status_class = " stockout" if status_text.strip().lower() == "stockout" else ""
+            rows_html.append(
+                "<tr>"
+                f"<td class='num'>{int(row['Rank'])}</td>"
+                f"<td>{html.escape(str(row['Model']))}</td>"
+                f"<td><span class='pareto-status{status_class}'>{html.escape(status_text)}</span></td>"
+                f"<td class='num'>{int(row['Inventory']):,}</td>"
+                f"<td class='num'>{int(row['Transfer']):,}</td>"
+                f"<td class='num'>{int(row['DOI']):,}</td>"
+                "</tr>"
+            )
+
+        table_html = (
+            "<div class='pareto-html-shell'>"
+            "<table class='pareto-html-table'>"
+            "<colgroup>"
+            "<col style='width:7%'>"
+            "<col style='width:35%'>"
+            "<col style='width:16%'>"
+            "<col style='width:14%'>"
+            "<col style='width:14%'>"
+            "<col style='width:14%'>"
+            "</colgroup>"
+            "<thead><tr>"
+            "<th class='num'>Rank</th><th>Model</th><th>Status</th>"
+            "<th class='num'>Inventory</th><th class='num'>Transfer</th><th class='num'>DOI</th>"
+            "</tr></thead>"
+            "<tbody>" + "".join(rows_html) + "</tbody>"
+            "</table></div>"
+        )
+        st.markdown(table_html, unsafe_allow_html=True)
 
 
-# Full-width stacked Pareto panels eliminate horizontal scrolling and keep
-# all six operational columns readable at standard laptop/browser widths.
-for pareto_class, pareto_color in [
-    ("Class A", "#f87171"),
-    ("Class B", "#fbbf24"),
-    ("Class C", "#4ade80"),
-]:
-    with st.container(border=True):
-        render_pareto_table(branch_data, pareto_class, pareto_color)
-    st.markdown("<div class='pareto-panel-spacer'></div>", unsafe_allow_html=True)
+    # Full-width stacked Pareto panels eliminate horizontal scrolling and keep
+    # all six operational columns readable at standard laptop/browser widths.
+    for pareto_class, pareto_color in [
+        ("Class A", "#f87171"),
+        ("Class B", "#fbbf24"),
+        ("Class C", "#4ade80"),
+    ]:
+        with st.container(border=True):
+            render_pareto_table(branch_data, pareto_class, pareto_color)
+        st.markdown("<div class='pareto-panel-spacer'></div>", unsafe_allow_html=True)
 
-st.markdown("<br>", unsafe_allow_html=True)
-st.caption(
-    "SCM Executive Control Tower  • Modal data import. • [Access DRP Module](https://scmdrp.streamlit.app/)"
-)
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.caption(
+        "SCM Executive Control Tower  • Modal data import. • [Access DRP Module](https://scmdrp.streamlit.app/)"
+    )
+
+
+# =========================================================
+# SECONDARY TAB: PROCUREMENTS
+# =========================================================
+with tab_procurements:
+    st.markdown("<br>", unsafe_allow_html=True)
+    section_heading(
+        "Procurements Control", 
+        "Manage purchase orders, incoming stock allocations, and supplier lead times"
+    )
+
+    proc_col1, proc_col2 = st.columns(2, gap="medium")
+
+    with proc_col1:
+        st.markdown(
+            """
+            <div class='metric-card' style='min-height: 250px;'>
+                <div class='metric-header'>
+                    <span style='color: #6366f1; font-weight: 900; font-size: 1.1rem;'>🏍️ MOTORCYCLE UNITS</span>
+                </div>
+                <hr style='margin: 10px 0; border-color: rgba(148, 163, 184, 0.1);'>
+                <div style='color: var(--scm-muted); font-size: 0.85rem; line-height: 1.6;'>
+                    <b>Pipeline Visibility</b><br>
+                    • Supplier Lead Times<br>
+                    • Incoming Allocations<br>
+                    • Backorder Tracking<br><br>
+                    <i>(Procurement data integration pending)</i>
+                </div>
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
+
+    with proc_col2:
+        st.markdown(
+            """
+            <div class='metric-card' style='min-height: 250px;'>
+                <div class='metric-header'>
+                    <span style='color: #10b981; font-weight: 900; font-size: 1.1rem;'>⚙️ SPARE PARTS</span>
+                </div>
+                <hr style='margin: 10px 0; border-color: rgba(148, 163, 184, 0.1);'>
+                <div style='color: var(--scm-muted); font-size: 0.85rem; line-height: 1.6;'>
+                    <b>Replenishment Status</b><br>
+                    • Active Purchase Orders<br>
+                    • Critical Shortages<br>
+                    • Parts Delivery Schedule<br><br>
+                    <i>(Procurement data integration pending)</i>
+                </div>
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
