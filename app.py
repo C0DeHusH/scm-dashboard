@@ -380,11 +380,10 @@ st.markdown(
             border-right: 1px solid rgba(148,163,184,0.16);
         }
 
-        /* ---------- World-class executive hero ---------- */
+        /* ---------- Executive hero: clean single-column design ---------- */
         /*
-         * The hero remains part of the normal document flow (not sticky).
-         * A grid layout, min-width:0 and isolated text blocks prevent overlap
-         * across desktop, tablet and mobile widths.
+         * The hero stays in normal document flow and uses a strict vertical
+         * layout. Title and subtitle have independent rows, so they cannot overlap.
          */
         div[data-testid="stElementContainer"]:has(.hero-shell),
         div.element-container:has(.hero-shell) {
@@ -392,7 +391,7 @@ st.markdown(
             inset: auto !important;
             z-index: auto !important;
             width: 100% !important;
-            margin: 0 0 0.85rem 0 !important;
+            margin: 0 0 0.95rem 0 !important;
             overflow: visible !important;
         }
 
@@ -401,83 +400,95 @@ st.markdown(
             box-sizing: border-box;
             width: 100%;
             min-width: 0;
-            isolation: isolate;
             overflow: hidden;
-            border: 1px solid rgba(129, 140, 248, 0.30);
+            border: 1px solid rgba(129, 140, 248, 0.28);
             border-radius: 22px;
-            padding: clamp(20px, 2.2vw, 32px) clamp(20px, 2.8vw, 42px);
+            padding: clamp(22px, 2.2vw, 34px) clamp(20px, 2.8vw, 44px);
             background:
-                radial-gradient(circle at 84% 20%, rgba(56,189,248,0.16), transparent 24rem),
-                radial-gradient(circle at 5% 10%, rgba(99,102,241,0.22), transparent 28rem),
-                linear-gradient(135deg, #0b1220 0%, #111a2d 46%, #0f172a 100%);
+                radial-gradient(circle at 88% 14%, rgba(56,189,248,0.13), transparent 24rem),
+                radial-gradient(circle at 6% 8%, rgba(99,102,241,0.20), transparent 30rem),
+                linear-gradient(135deg, #0b1220 0%, #111a2d 48%, #0f172a 100%);
             box-shadow:
-                0 22px 55px rgba(2, 6, 23, 0.28),
-                inset 0 1px 0 rgba(255,255,255,0.06);
+                0 20px 50px rgba(2, 6, 23, 0.24),
+                inset 0 1px 0 rgba(255,255,255,0.055);
         }
 
         .hero-shell::before {
             content: "";
             position: absolute;
-            inset: 0 auto 0 0;
+            left: 0;
+            top: 0;
+            bottom: 0;
             width: 5px;
-            background: linear-gradient(180deg, #818cf8, #38bdf8 55%, #34d399);
+            background: linear-gradient(180deg, #818cf8, #38bdf8 58%, #34d399);
             opacity: 0.95;
-            z-index: 0;
         }
 
         .hero-shell::after {
             content: "";
             position: absolute;
-            right: -70px;
-            top: -95px;
-            width: 240px;
-            height: 240px;
+            right: -90px;
+            top: -120px;
+            width: 300px;
+            height: 300px;
             border-radius: 50%;
-            border: 1px solid rgba(255,255,255,0.055);
+            border: 1px solid rgba(255,255,255,0.045);
             box-shadow:
-                0 0 0 34px rgba(255,255,255,0.020),
-                0 0 0 68px rgba(255,255,255,0.012);
+                0 0 0 42px rgba(255,255,255,0.016),
+                0 0 0 84px rgba(255,255,255,0.009);
             pointer-events: none;
-            z-index: 0;
         }
 
         .hero-grid {
             position: relative;
             z-index: 1;
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(210px, 0.34fr);
-            gap: clamp(22px, 4vw, 56px);
-            align-items: center;
+            display: block;
             width: 100%;
             min-width: 0;
         }
 
-        .hero-copy,
-        .hero-side {
+        .hero-copy {
+            position: relative;
+            z-index: 2;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            grid-template-rows: auto auto auto;
+            row-gap: 0;
+            width: 100%;
             min-width: 0;
+            max-width: 1280px;
         }
 
-        .hero-copy {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
+        .hero-kicker,
+        .hero-title,
+        .hero-subtitle {
+            position: static !important;
+            float: none !important;
+            clear: both;
+            width: 100%;
+            min-width: 0;
+            max-width: 100%;
+            height: auto !important;
+            min-height: 0 !important;
+            transform: none !important;
+            white-space: normal !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
+            word-break: normal;
+            overflow-wrap: break-word;
         }
 
         .hero-kicker {
-            display: inline-flex;
+            display: flex;
             align-items: center;
-            gap: 8px;
-            width: fit-content;
-            max-width: 100%;
+            gap: 9px;
             color: #c7d2fe;
-            font-size: clamp(0.66rem, 0.70vw, 0.76rem);
-            font-weight: 800;
-            line-height: 1.3;
+            font-size: clamp(0.65rem, 0.72vw, 0.77rem);
+            font-weight: 850;
+            line-height: 1.35;
             letter-spacing: 0.12em;
             text-transform: uppercase;
-            margin: 0 0 10px 0;
-            white-space: normal;
-            overflow-wrap: anywhere;
+            margin: 0 0 12px 0 !important;
         }
 
         .hero-kicker::before {
@@ -492,144 +503,63 @@ st.markdown(
 
         .hero-title {
             display: block;
-            width: 100%;
-            max-width: 980px;
-            min-width: 0;
             color: #f8fafc;
-            font-size: clamp(1.65rem, 3.15vw, 3.15rem);
+            font-size: clamp(1.55rem, 2.75vw, 2.85rem);
             font-weight: 900;
-            line-height: 1.06;
-            letter-spacing: -0.035em;
-            margin: 0;
-            white-space: normal;
-            overflow-wrap: anywhere;
-            word-break: normal;
+            line-height: 1.12 !important;
+            letter-spacing: -0.032em;
+            margin: 0 0 14px 0 !important;
+            padding: 0 !important;
             text-wrap: balance;
         }
 
         .hero-subtitle {
             display: block;
-            width: 100%;
-            max-width: 900px;
-            min-width: 0;
+            max-width: 1120px;
             color: #cbd5e1;
-            font-size: clamp(0.82rem, 1.05vw, 1.02rem);
+            font-size: clamp(0.82rem, 1vw, 1rem);
             font-weight: 500;
-            line-height: 1.65;
-            margin: 14px 0 0 0;
-            white-space: normal;
-            overflow-wrap: anywhere;
-            word-break: normal;
-        }
-
-        .hero-side {
-            display: grid;
-            gap: 10px;
-            align-content: center;
-        }
-
-        .hero-side-card {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            min-width: 0;
-            padding: 11px 13px;
-            border: 1px solid rgba(148,163,184,0.16);
-            border-radius: 13px;
-            background: rgba(255,255,255,0.035);
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
-        }
-
-        .hero-side-icon {
-            display: grid;
-            place-items: center;
-            flex: 0 0 32px;
-            width: 32px;
-            height: 32px;
-            border-radius: 10px;
-            background: rgba(99,102,241,0.16);
-            color: #c7d2fe;
-            font-size: 0.82rem;
-            font-weight: 900;
-        }
-
-        .hero-side-copy {
-            min-width: 0;
-        }
-
-        .hero-side-label {
-            display: block;
-            color: #94a3b8;
-            font-size: 0.61rem;
-            font-weight: 800;
-            letter-spacing: 0.09em;
-            text-transform: uppercase;
-            line-height: 1.2;
-            margin-bottom: 2px;
-        }
-
-        .hero-side-value {
-            display: block;
-            color: #f8fafc;
-            font-size: 0.78rem;
-            font-weight: 800;
-            line-height: 1.28;
-            white-space: normal;
-            overflow-wrap: anywhere;
-        }
-
-        @media (max-width: 1050px) {
-            .hero-grid {
-                grid-template-columns: minmax(0, 1fr);
-                gap: 18px;
-            }
-
-            .hero-side {
-                grid-template-columns: repeat(3, minmax(0, 1fr));
-            }
+            line-height: 1.65 !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }
 
         @media (max-width: 760px) {
             .hero-shell {
                 border-radius: 17px;
-                padding: 18px 16px 19px 18px;
+                padding: 19px 16px 20px 19px;
+            }
+
+            .hero-kicker {
+                font-size: 0.62rem;
+                letter-spacing: 0.09em;
+                margin-bottom: 10px !important;
             }
 
             .hero-title {
-                font-size: clamp(1.42rem, 7vw, 2.15rem);
-                line-height: 1.10;
+                font-size: clamp(1.42rem, 7vw, 2.05rem);
+                line-height: 1.14 !important;
+                margin-bottom: 12px !important;
             }
 
             .hero-subtitle {
-                font-size: 0.82rem;
-                line-height: 1.55;
-                margin-top: 10px;
-            }
-
-            .hero-side {
-                grid-template-columns: 1fr;
-                gap: 8px;
+                font-size: 0.80rem;
+                line-height: 1.55 !important;
             }
         }
 
         @media (max-width: 420px) {
             .hero-shell {
-                padding: 16px 13px 16px 16px;
-            }
-
-            .hero-kicker {
-                font-size: 0.60rem;
-                letter-spacing: 0.08em;
-                margin-bottom: 8px;
+                padding: 17px 13px 18px 17px;
             }
 
             .hero-title {
-                font-size: 1.32rem;
+                font-size: 1.30rem;
             }
 
             .hero-subtitle {
-                font-size: 0.76rem;
-                line-height: 1.50;
+                font-size: 0.75rem;
+                line-height: 1.50 !important;
             }
         }
 
@@ -875,11 +805,10 @@ st.markdown(
             <div class="hero-copy">
                 <div class="hero-kicker">Supply Chain Management • Executive Analytics</div>
                 <div class="hero-title">MUTI MC SCM Executive Control Tower</div>
-                <div class="hero-subtitle">
-                    Inventory visibility, Pareto risk prioritization, stockout trends, Days of Inventory, and branch-level action monitoring.
-                </div>
+                <div class="hero-subtitle">Inventory visibility, Pareto risk prioritization, stockout trends, Days of Inventory, and branch-level action monitoring.</div>
             </div>
-
+        </div>
+    </div>
     """,
     unsafe_allow_html=True,
 )
@@ -1438,14 +1367,21 @@ def create_styled_line_chart(
             f"{int(line_color[5:7], 16)}, 0.08)"
         )
 
+    # Alternate data-label positions to reduce collisions when neighboring values are close.
+    text_positions = [
+        "top center" if index % 2 == 0 else "bottom center"
+        for index in range(len(chart_df))
+    ]
+
     fig.add_trace(
         go.Scatter(
             x=chart_x,
             y=plot_y,
             customdata=hover_dates,
+            name="Actual",
             mode="lines+markers+text",
             text=text_labels,
-            textposition="top center",
+            textposition=text_positions,
             textfont=dict(size=10, family="Arial"),
             line=dict(
                 shape=line_shape,
@@ -1465,7 +1401,60 @@ def create_styled_line_chart(
         )
     )
 
+    # -----------------------------------------------------
+    # DIRECTION / TREND LINE
+    # -----------------------------------------------------
+    # A linear best-fit trend is drawn as a broken (dashed) line.
+    # It is calculated only from the dates that contain real KPI observations;
+    # no additional dates or data points are created.
+    trend_y = None
+    if len(chart_df) >= 2:
+        trend_x = (
+            (chart_df["period"] - chart_df["period"].min())
+            .dt.total_seconds()
+            .to_numpy(dtype=float)
+            / 86400.0
+        )
+        trend_source_y = pd.to_numeric(plot_y, errors="coerce").to_numpy(dtype=float)
+        valid_trend = np.isfinite(trend_x) & np.isfinite(trend_source_y)
+
+        if valid_trend.sum() >= 2 and np.ptp(trend_x[valid_trend]) > 0:
+            slope, intercept = np.polyfit(
+                trend_x[valid_trend],
+                trend_source_y[valid_trend],
+                1,
+            )
+            trend_y = slope * trend_x + intercept
+            # Stockout percentages and DOI cannot be negative in this dashboard.
+            trend_y = np.maximum(trend_y, 0)
+
+            trend_hover = (
+                "Trend direction: <b>%{y:.0%}</b><extra></extra>"
+                if is_percentage
+                else "Trend direction: <b>%{y:,.0f}</b><extra></extra>"
+            )
+
+            fig.add_trace(
+                go.Scatter(
+                    x=chart_x,
+                    y=trend_y,
+                    name="Trend",
+                    mode="lines",
+                    line=dict(
+                        width=2.2,
+                        dash="dash",
+                        color="rgba(148,163,184,0.90)",
+                    ),
+                    hovertemplate=trend_hover,
+                    connectgaps=False,
+                )
+            )
+
     max_observed = pd.to_numeric(plot_y, errors="coerce").max()
+    if trend_y is not None and len(trend_y):
+        trend_max = np.nanmax(trend_y)
+        if np.isfinite(trend_max):
+            max_observed = max(max_observed, trend_max)
     if pd.isna(max_observed) or max_observed <= 0:
         y_max = default_ceiling
     else:
@@ -1512,7 +1501,16 @@ def create_styled_line_chart(
         height=365,
         margin=dict(t=82, b=48, l=50, r=25),
         hovermode="closest",
-        showlegend=False,
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.015,
+            xanchor="right",
+            x=0.99,
+            bgcolor="rgba(0,0,0,0)",
+            font=dict(size=10, color="#94a3b8"),
+        ),
         title=dict(
             text=(
                 f"{title}<br>"
