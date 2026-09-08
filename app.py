@@ -1733,7 +1733,7 @@ def create_styled_line_chart(
             text=(
                 f"{title}<br>"
                 f"<span style='font-size:10px; color:#94a3b8;'>"
-                f"{subtitle} • {len(chart_df)} DATA PERIOD(S) • LATEST {latest_text.upper()} • DASHED GUIDE ABOVE ACTUAL"
+                f"{subtitle} • {len(chart_df)} DATA PERIOD(S) • LATEST {latest_text.upper()}"
                 f"</span>"
             ),
             x=0.02,
@@ -1803,24 +1803,7 @@ persistence_label = (
 
 st.markdown(
     f"""
-    <div class="status-strip">
-        <span class="status-pill">
-            <span class="status-dot"></span>
-            <strong>Dashboard online</strong>
-        </span>
-        <span class="status-pill">
-            Data source: <strong>{storage_source}</strong>
-        </span>
-        <span class="status-pill">
-            Persistence: <strong>{persistence_label}</strong>
-        </span>
-        <span class="status-pill">
-            Latest KPI: <strong>{dashboard_latest_date}</strong>
-        </span>
-        <span class="status-pill">
-            Rounding: <strong>Half-up</strong>
-        </span>
-    </div>
+
     """,
     unsafe_allow_html=True,
 )
