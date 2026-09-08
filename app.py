@@ -879,31 +879,7 @@ st.markdown(
                     Inventory visibility, Pareto risk prioritization, stockout trends, Days of Inventory, and branch-level action monitoring.
                 </div>
             </div>
-            <div class="hero-side" aria-label="Dashboard capabilities">
-                <div class="hero-side-card">
-                    <div class="hero-side-icon">01</div>
-                    <div class="hero-side-copy">
-                        <span class="hero-side-label">Visibility</span>
-                        <span class="hero-side-value">Network-wide inventory intelligence</span>
-                    </div>
-                </div>
-                <div class="hero-side-card">
-                    <div class="hero-side-icon">02</div>
-                    <div class="hero-side-copy">
-                        <span class="hero-side-label">Risk</span>
-                        <span class="hero-side-value">Pareto-led stockout prioritization</span>
-                    </div>
-                </div>
-                <div class="hero-side-card">
-                    <div class="hero-side-icon">03</div>
-                    <div class="hero-side-copy">
-                        <span class="hero-side-label">Action</span>
-                        <span class="hero-side-value">Branch-level transfer monitoring</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+
     """,
     unsafe_allow_html=True,
 )
