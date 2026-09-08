@@ -2051,17 +2051,19 @@ m4.markdown(
 
 
 # =========================================================
-# 9. AVERAGE STOCK OUT RATE PER AREA — MOVED BELOW TRENDS
+# 9. STOCK OUT RATE PER AREA — AVERAGE + CLASS A
 # =========================================================
 st.markdown("<br>", unsafe_allow_html=True)
 section_heading(
-    "Average Stock Out Rate per Area",
-    "Raw Data • average of Class A, B and C stockout rates",
+    "Stock Out Rate per Area",
+    "Average = mean of Class A/B/C rates • Class A = Class A Stock Out Count ÷ Total Stock Status Count",
 )
 
 area_rates = []
 for area in sorted([a for a in raw_data["area"].dropna().unique() if str(a).strip()]):
-    a_df = raw_data[raw_data["area"] == area]
+    a_df = raw_data[raw_data["area"] == area].copy()
+
+    # Existing Average Stock Out Rate logic is intentionally preserved.
     avg_area_rate = round_half_up(
         (
             calculate_stockout_rate(a_df, "Class A")
@@ -2070,8 +2072,31 @@ for area in sorted([a for a in raw_data["area"].dropna().unique() if str(a).stri
         )
         / 3
     )
+
+    # Requested Class A area formula:
+    # Class A Stock Out Count / Total Stock Status Count for the entire area.
+    area_status = a_df["stock_status"].fillna("").astype(str).str.lower().str.strip()
+    area_class = a_df["pareto_class"].fillna("").astype(str).str.strip()
+
+    total_stock_status_count = area_status.ne("").sum()
+    class_a_stockout_count = (
+        area_class.eq("Class A") & area_status.eq("stockout")
+    ).sum()
+
+    class_a_area_rate = (
+        round_half_up((class_a_stockout_count / total_stock_status_count) * 100)
+        if total_stock_status_count > 0
+        else 0
+    )
+
     area_rates.append(
-        {"Area": area, "Average Stock Out Rate": avg_area_rate}
+        {
+            "Area": area,
+            "Average Stock Out Rate": avg_area_rate,
+            "Class A Stock Out Rate": class_a_area_rate,
+            "Class A Stock Out Count": int(class_a_stockout_count),
+            "Total Stock Status Count": int(total_stock_status_count),
+        }
     )
 
 area_rates_df = pd.DataFrame(area_rates)
@@ -2079,68 +2104,137 @@ area_rates_df = pd.DataFrame(area_rates)
 if area_rates_df.empty:
     st.info("No area-level stockout data available.")
 else:
-    # Vertical executive column chart: one bar per area.
-    # Sort highest risk first while keeping each area label fully visible.
+    # Keep one common area order so the two side-by-side charts are easy to compare.
     area_rates_df = area_rates_df.sort_values(
         "Average Stock Out Rate", ascending=False
     ).reset_index(drop=True)
+    area_order = area_rates_df["Area"].tolist()
 
-    fig_bar = px.bar(
-        area_rates_df,
-        x="Area",
-        y="Average Stock Out Rate",
-        text="Average Stock Out Rate",
-        template="plotly",
-    )
+    avg_col, class_a_col = st.columns(2, gap="small")
 
-    fig_bar.update_traces(
-        marker_color="#6366f1",
-        marker_line=dict(width=0),
-        opacity=0.92,
-        texttemplate="%{text:.0f}%",
-        textposition="outside",
-        cliponaxis=False,
-        hovertemplate=(
-            "<b>%{x}</b><br>"
-            "Average Stock Out Rate: <b>%{y:.0f}%</b>"
-            "<extra></extra>"
-        ),
-    )
+    with avg_col:
+        fig_bar = px.bar(
+            area_rates_df,
+            x="Area",
+            y="Average Stock Out Rate",
+            text="Average Stock Out Rate",
+            template="plotly",
+            title="Average Stock Out Rate per Area",
+        )
 
-    bar_max = area_rates_df["Average Stock Out Rate"].max()
-    fig_bar.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        height=425,
-        margin=dict(t=28, b=58, l=44, r=20),
-        showlegend=False,
-        bargap=0.28,
-        hoverlabel=dict(
-            bgcolor="#0f172a",
-            bordercolor="rgba(148,163,184,0.28)",
-            font=dict(color="#f8fafc", size=11),
-        ),
-        xaxis=dict(
-            title="",
-            type="category",
-            categoryorder="array",
-            categoryarray=area_rates_df["Area"].tolist(),
-            showgrid=False,
-            tickangle=0,
-            automargin=True,
-            linecolor="rgba(148,163,184,0.18)",
-        ),
-        yaxis=dict(
-            title="Stockout Rate",
-            ticksuffix="%",
-            range=[0, max(10, bar_max * 1.24)],
-            gridcolor="rgba(148,163,184,0.14)",
-            zeroline=False,
-            automargin=True,
-        ),
-    )
+        fig_bar.update_traces(
+            marker_color="#6366f1",
+            marker_line=dict(width=0),
+            opacity=0.92,
+            texttemplate="%{text:.0f}%",
+            textposition="outside",
+            cliponaxis=False,
+            hovertemplate=(
+                "<b>%{x}</b><br>"
+                "Average Stock Out Rate: <b>%{y:.0f}%</b>"
+                "<extra></extra>"
+            ),
+        )
 
-    st.plotly_chart(fig_bar, use_container_width=True)
+        avg_bar_max = area_rates_df["Average Stock Out Rate"].max()
+        fig_bar.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            height=425,
+            margin=dict(t=62, b=58, l=44, r=20),
+            showlegend=False,
+            bargap=0.28,
+            title=dict(x=0.02, xanchor="left", font=dict(size=16)),
+            hoverlabel=dict(
+                bgcolor="#0f172a",
+                bordercolor="rgba(148,163,184,0.28)",
+                font=dict(color="#f8fafc", size=11),
+            ),
+            xaxis=dict(
+                title="",
+                type="category",
+                categoryorder="array",
+                categoryarray=area_order,
+                showgrid=False,
+                tickangle=0,
+                automargin=True,
+                linecolor="rgba(148,163,184,0.18)",
+            ),
+            yaxis=dict(
+                title="Stockout Rate",
+                ticksuffix="%",
+                range=[0, max(10, avg_bar_max * 1.24)],
+                gridcolor="rgba(148,163,184,0.14)",
+                zeroline=False,
+                automargin=True,
+            ),
+        )
+
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+    with class_a_col:
+        fig_class_a = px.bar(
+            area_rates_df,
+            x="Area",
+            y="Class A Stock Out Rate",
+            text="Class A Stock Out Rate",
+            template="plotly",
+            title="Class A Stock Out Rate per Area",
+            custom_data=["Class A Stock Out Count", "Total Stock Status Count"],
+        )
+
+        fig_class_a.update_traces(
+            marker_color="#f43f5e",
+            marker_line=dict(width=0),
+            opacity=0.92,
+            texttemplate="%{text:.0f}%",
+            textposition="outside",
+            cliponaxis=False,
+            hovertemplate=(
+                "<b>%{x}</b><br>"
+                "Class A Stock Out Rate: <b>%{y:.0f}%</b><br>"
+                "Class A Stock Out Count: <b>%{customdata[0]}</b><br>"
+                "Total Stock Status Count: <b>%{customdata[1]}</b>"
+                "<extra></extra>"
+            ),
+        )
+
+        class_a_bar_max = area_rates_df["Class A Stock Out Rate"].max()
+        fig_class_a.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            height=425,
+            margin=dict(t=62, b=58, l=44, r=20),
+            showlegend=False,
+            bargap=0.28,
+            title=dict(x=0.02, xanchor="left", font=dict(size=16)),
+            hoverlabel=dict(
+                bgcolor="#0f172a",
+                bordercolor="rgba(148,163,184,0.28)",
+                font=dict(color="#f8fafc", size=11),
+            ),
+            xaxis=dict(
+                title="",
+                type="category",
+                categoryorder="array",
+                categoryarray=area_order,
+                showgrid=False,
+                tickangle=0,
+                automargin=True,
+                linecolor="rgba(148,163,184,0.18)",
+            ),
+            yaxis=dict(
+                title="Class A Stockout Rate",
+                ticksuffix="%",
+                range=[0, max(10, class_a_bar_max * 1.24)],
+                gridcolor="rgba(148,163,184,0.14)",
+                zeroline=False,
+                automargin=True,
+            ),
+        )
+
+        st.plotly_chart(fig_class_a, use_container_width=True)
+
 
 st.markdown("---")
 
