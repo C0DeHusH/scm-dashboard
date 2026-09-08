@@ -380,16 +380,12 @@ st.markdown(
             border-right: 1px solid rgba(148,163,184,0.16);
         }
 
-        /*
-         * Frozen executive header.
-         * Keep a single sticky Streamlit container and position it below
-         * Streamlit's own toolbar so the text is never hidden or overlapped.
-         */
+        /* Executive header scrolls naturally with the page. */
         div[data-testid="stElementContainer"]:has(.hero-shell),
         div.element-container:has(.hero-shell) {
-            position: sticky;
-            top: 3.75rem;
-            z-index: 999;
+            position: static;
+            top: auto;
+            z-index: auto;
             margin-bottom: 0.55rem;
         }
 
@@ -449,11 +445,6 @@ st.markdown(
         }
 
         @media (max-width: 900px) {
-            div[data-testid="stElementContainer"]:has(.hero-shell),
-            div.element-container:has(.hero-shell) {
-                top: 3.50rem;
-            }
-
             .hero-shell {
                 padding: 10px 13px 11px 13px;
                 border-radius: 13px;
