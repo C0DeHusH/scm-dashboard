@@ -2056,14 +2056,21 @@ m4.markdown(
 st.markdown("<br>", unsafe_allow_html=True)
 section_heading(
     "Stock Out Rate per Area",
-    "Average = mean of Class A/B/C rates • Class A = Class A Stock Out Count ÷ Total Stock Status Count",
+    "Average = mean of Class A/B/C rates • Class A = Class A Stock Out Count ÷ Class A Total Stock Status Count",
 )
 
 area_rates = []
-for area in sorted([a for a in raw_data["area"].dropna().unique() if str(a).strip()]):
-    a_df = raw_data[raw_data["area"] == area].copy()
 
-    # Existing Average Stock Out Rate logic is intentionally preserved.
+# IMPORTANT: calculate every KPI independently PER AREA first.
+# Example: AREA I uses only AREA I records; AREA II uses only AREA II records.
+for area, a_df in raw_data.groupby("area", sort=True, dropna=True):
+    if not str(area).strip():
+        continue
+
+    a_df = a_df.copy()
+
+    # Existing Average Stock Out Rate logic is intentionally preserved,
+    # but it is calculated only from the current area's records.
     avg_area_rate = round_half_up(
         (
             calculate_stockout_rate(a_df, "Class A")
@@ -2073,19 +2080,33 @@ for area in sorted([a for a in raw_data["area"].dropna().unique() if str(a).stri
         / 3
     )
 
-    # Requested Class A area formula:
-    # Class A Stock Out Count / Total Stock Status Count for the entire area.
-    area_status = a_df["stock_status"].fillna("").astype(str).str.lower().str.strip()
-    area_class = a_df["pareto_class"].fillna("").astype(str).str.strip()
+    # CLASS A STOCK OUT RATE — PER AREA
+    # Numerator   = Class A Stock Out Count in THIS AREA
+    # Denominator = Total Class A Stock Status Count in THIS AREA
+    # Formula     = Numerator / Denominator * 100
+    normalized_class = (
+        a_df["pareto_class"].fillna("").astype(str).str.strip().str.casefold()
+    )
+    class_a_df = a_df[normalized_class.eq("class a")].copy()
 
-    total_stock_status_count = area_status.ne("").sum()
-    class_a_stockout_count = (
-        area_class.eq("Class A") & area_status.eq("stockout")
-    ).sum()
+    class_a_status = (
+        class_a_df["stock_status"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .str.casefold()
+    )
+
+    class_a_stockout_count = int(class_a_status.eq("stockout").sum())
+    # Total Stock Status Count follows the dashboard logic: one Class A row = one
+    # Class A stock-status record for the current area.
+    class_a_total_stock_status_count = int(len(class_a_df))
 
     class_a_area_rate = (
-        round_half_up((class_a_stockout_count / total_stock_status_count) * 100)
-        if total_stock_status_count > 0
+        round_half_up(
+            (class_a_stockout_count / class_a_total_stock_status_count) * 100
+        )
+        if class_a_total_stock_status_count > 0
         else 0
     )
 
@@ -2094,8 +2115,8 @@ for area in sorted([a for a in raw_data["area"].dropna().unique() if str(a).stri
             "Area": area,
             "Average Stock Out Rate": avg_area_rate,
             "Class A Stock Out Rate": class_a_area_rate,
-            "Class A Stock Out Count": int(class_a_stockout_count),
-            "Total Stock Status Count": int(total_stock_status_count),
+            "Class A Stock Out Count": class_a_stockout_count,
+            "Class A Total Stock Status Count": class_a_total_stock_status_count,
         }
     )
 
@@ -2180,7 +2201,7 @@ else:
             text="Class A Stock Out Rate",
             template="plotly",
             title="Class A Stock Out Rate per Area",
-            custom_data=["Class A Stock Out Count", "Total Stock Status Count"],
+            custom_data=["Class A Stock Out Count", "Class A Total Stock Status Count"],
         )
 
         fig_class_a.update_traces(
@@ -2194,7 +2215,7 @@ else:
                 "<b>%{x}</b><br>"
                 "Class A Stock Out Rate: <b>%{y:.0f}%</b><br>"
                 "Class A Stock Out Count: <b>%{customdata[0]}</b><br>"
-                "Total Stock Status Count: <b>%{customdata[1]}</b>"
+                "Class A Total Stock Status Count: <b>%{customdata[1]}</b>"
                 "<extra></extra>"
             ),
         )
