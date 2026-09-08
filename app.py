@@ -323,6 +323,7 @@ def initialize_persistent_workbook():
 # =========================================================
 # 1. PAGE CONFIGURATION
 # =========================================================
+
 st.set_page_config(
     page_title="SCM Executive Control Tower",
     page_icon="📊",
@@ -335,7 +336,7 @@ st.set_page_config(
 # =========================================================
 st.markdown(
     """
-    <style>
+    <style><br>
         :root {
             --scm-navy: #0b1220;
             --scm-indigo: #6366f1;
