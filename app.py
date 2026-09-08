@@ -2301,5 +2301,5 @@ for pareto_class, pareto_color in [
 
 st.markdown("<br>", unsafe_allow_html=True)
 st.caption(
-    "SCM Executive Control Tower • Full-width executive UI • Modal data import • React-safe Pareto tables • Half-up rounding • January-aware YTD • Weekly actual-data dates only • Cloud persistence ready."
+    "SCM Executive Control Tower  • Modal data import."
 )
