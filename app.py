@@ -20,6 +20,73 @@ DEFAULT_SUPABASE_BUCKET = "scm-dashboard"
 DEFAULT_SUPABASE_OBJECT = "persistent_scm_data.xlsx"
 
 
+# Excel file signatures. Detect from the actual bytes instead of trusting
+# a temporary/cloud filename, which may not retain an extension online.
+XLSX_SIGNATURES = (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")
+XLS_SIGNATURE = b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"
+
+
+def detect_excel_engine(file_path_or_buffer):
+    """
+    Return the explicit pandas Excel engine based on the workbook bytes.
+
+    .xlsx/.xlsm/.xltx files are ZIP containers -> openpyxl
+    legacy .xls files are OLE Compound Documents -> xlrd
+
+    This prevents the deployment error:
+      "Excel file format cannot be determined, you must specify an engine manually."
+    """
+    signature = b""
+
+    if isinstance(file_path_or_buffer, (str, os.PathLike)):
+        path = os.fspath(file_path_or_buffer)
+        try:
+            with open(path, "rb") as handle:
+                signature = handle.read(8)
+        except OSError as exc:
+            raise ValueError(f"Cannot open workbook file: {exc}") from exc
+    elif isinstance(file_path_or_buffer, (bytes, bytearray)):
+        signature = bytes(file_path_or_buffer[:8])
+    elif hasattr(file_path_or_buffer, "read"):
+        # Preserve the caller's current stream position.
+        original_position = None
+        try:
+            if hasattr(file_path_or_buffer, "tell"):
+                original_position = file_path_or_buffer.tell()
+            if hasattr(file_path_or_buffer, "seek"):
+                file_path_or_buffer.seek(0)
+            signature = file_path_or_buffer.read(8)
+        finally:
+            if hasattr(file_path_or_buffer, "seek"):
+                file_path_or_buffer.seek(
+                    original_position if original_position is not None else 0
+                )
+    else:
+        raise ValueError(
+            "Unsupported workbook input. Please upload a valid .xlsx or .xls file."
+        )
+
+    if any(signature.startswith(sig) for sig in XLSX_SIGNATURES):
+        return "openpyxl"
+
+    if signature.startswith(XLS_SIGNATURE):
+        return "xlrd"
+
+    raise ValueError(
+        "The uploaded/saved file is not a valid Excel workbook. "
+        "Please open it in Microsoft Excel and save/export it as .xlsx, "
+        "then upload it again."
+    )
+
+
+def validate_excel_bytes(file_bytes):
+    """Validate that persisted bytes are a supported Excel container."""
+    if not file_bytes:
+        return False
+    detect_excel_engine(io.BytesIO(file_bytes))
+    return True
+
+
 def round_half_up(value, ndigits=0):
     """
     Standard business rounding (ROUND_HALF_UP):
@@ -221,6 +288,10 @@ def initialize_persistent_workbook():
         try:
             cloud_bytes = download_cloud_workbook()
             if cloud_bytes:
+                # Never activate a cloud object unless it is really an Excel file.
+                # This also protects the app if an old/incorrect object was uploaded
+                # to the same Supabase Storage path.
+                validate_excel_bytes(cloud_bytes)
                 st.session_state["scm_workbook_bytes"] = cloud_bytes
                 st.session_state["scm_storage_source"] = "Cloud • Supabase"
                 # Refresh the local cache for faster fallback/debugging.
@@ -234,9 +305,16 @@ def initialize_persistent_workbook():
 
     local_bytes = load_local_cache()
     if local_bytes:
-        st.session_state["scm_workbook_bytes"] = local_bytes
-        st.session_state["scm_storage_source"] = "Local cache"
-        return local_bytes, "Local cache"
+        try:
+            validate_excel_bytes(local_bytes)
+        except Exception as exc:
+            st.session_state["scm_local_warning"] = (
+                "The saved local cache is not a valid Excel workbook: " + str(exc)
+            )
+        else:
+            st.session_state["scm_workbook_bytes"] = local_bytes
+            st.session_state["scm_storage_source"] = "Local cache"
+            return local_bytes, "Local cache"
 
     return None, "No saved workbook"
 
@@ -258,10 +336,37 @@ st.markdown(
     """
     <style>
         /* ---------- Global ---------- */
-        .block-container {
-            padding-top: 1.15rem;
-            padding-bottom: 3rem;
-            max-width: 1640px;
+        /* Use virtually the full browser width for the executive dashboard. */
+        .block-container,
+        [data-testid="stMainBlockContainer"] {
+            width: 100% !important;
+            max-width: 100% !important;
+            padding-top: 0.85rem !important;
+            padding-bottom: 2.25rem !important;
+            padding-left: 0.70rem !important;
+            padding-right: 0.70rem !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+        }
+
+        section[data-testid="stMain"] > div {
+            max-width: 100% !important;
+        }
+
+        @media (min-width: 1400px) {
+            .block-container,
+            [data-testid="stMainBlockContainer"] {
+                padding-left: 0.85rem !important;
+                padding-right: 0.85rem !important;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .block-container,
+            [data-testid="stMainBlockContainer"] {
+                padding-left: 0.45rem !important;
+                padding-right: 0.45rem !important;
+            }
         }
 
         /* Executive dashboard canvas */
@@ -609,7 +714,23 @@ st.markdown(
 # =========================================================
 @st.cache_data(show_spinner=False)
 def process_excel_file(file_path_or_buffer):
-    xls = pd.ExcelFile(file_path_or_buffer)
+    # Explicit engine selection is required for reliable online deployment,
+    # especially when a workbook is passed as BytesIO or downloaded from
+    # object storage without a filename/extension.
+    excel_engine = detect_excel_engine(file_path_or_buffer)
+
+    try:
+        xls = pd.ExcelFile(file_path_or_buffer, engine=excel_engine)
+    except ImportError as exc:
+        required_package = "openpyxl" if excel_engine == "openpyxl" else "xlrd"
+        raise ValueError(
+            f"Excel engine '{excel_engine}' is unavailable. "
+            f"Add '{required_package}' to requirements.txt and redeploy."
+        ) from exc
+    except Exception as exc:
+        raise ValueError(
+            f"Unable to open the Excel workbook using {excel_engine}: {exc}"
+        ) from exc
     sheet_map = {
         str(sheet).lower().strip().replace(" ", "_"): sheet
         for sheet in xls.sheet_names
@@ -931,6 +1052,10 @@ with st.sidebar:
         with st.expander("Cloud storage connection notice"):
             st.caption(st.session_state["scm_cloud_warning"])
 
+    if st.session_state.get("scm_local_warning"):
+        with st.expander("Local workbook notice"):
+            st.caption(st.session_state["scm_local_warning"])
+
     st.markdown("---")
     st.caption("Dashboard navigation")
     st.markdown(
@@ -961,6 +1086,12 @@ try:
     )
 except Exception as e:
     st.error(f"Import Failed: {e}")
+    st.info(
+        "Use a genuine Microsoft Excel .xlsx or .xls workbook. "
+        "For .xlsx, requirements.txt must include openpyxl; for legacy .xls, "
+        "it must include xlrd. If an older invalid workbook is stored in the cloud, "
+        "upload a valid workbook once to replace it."
+    )
     st.stop()
 
 
