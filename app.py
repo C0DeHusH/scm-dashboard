@@ -355,13 +355,13 @@ st.markdown(
 
         .block-container,
         [data-testid="stMainBlockContainer"] {
-            width: auto !important;
-            max-width: none !important;
+            width: 100% !important;
+            max-width: 100% !important;
             min-width: 0 !important;
             padding-top: 0.55rem !important;
             padding-bottom: 2.25rem !important;
-            padding-left: 0.06rem !important;
-            padding-right: clamp(0.22rem, 0.42vw, 0.48rem) !important;
+            padding-left: clamp(0.5rem, 2vw, 1.5rem) !important;
+            padding-right: clamp(0.5rem, 2vw, 1.5rem) !important;
             margin: 0 !important;
         }
 
@@ -373,24 +373,7 @@ st.markdown(
             overflow-x: clip !important;
         }
 
-        section[data-testid="stMain"] > div {
-            min-width: 0 !important;
-            max-width: none !important;
-            margin-left: 0 !important;
-            padding-left: 0 !important;
-            overflow-x: clip !important;
-        }
-
-        [data-testid="stMainBlockContainer"] > div:first-child {
-            margin-left: 0 !important;
-            padding-left: 0 !important;
-        }
-
-        [data-testid="stAppViewContainer"] {
-            background: var(--background-color);
-        }
-
-        /* TABS MAXIMIZATION - Remove native inner padding */
+        /* TABS MAXIMIZATION - Aggressively remove native inner padding */
         div[data-testid="stTabs"] {
             width: 100% !important;
             min-width: 0 !important;
@@ -399,34 +382,16 @@ st.markdown(
             width: 100% !important;
             padding-left: 0 !important;
             padding-right: 0 !important;
+            padding-bottom: 0 !important;
+            padding-top: 1rem !important;
         }
-
-        /* Remove the residual left gutter Streamlit can keep beside the sidebar. */
-        @media (min-width: 901px) {
-            [data-testid="stMainBlockContainer"] {
-                padding-left: 0.06rem !important;
-            }
-            section[data-testid="stMain"] > div {
-                margin-left: 0 !important;
-                padding-left: 0 !important;
-            }
+        div[data-baseweb="tab-panel"] > div {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
         }
-
-        @media (max-width: 900px) {
-            .block-container,
-            [data-testid="stMainBlockContainer"] {
-                padding-top: 0.42rem !important;
-                padding-left: 0.12rem !important;
-                padding-right: 0.30rem !important;
-            }
-        }
-
-        @media (max-width: 600px) {
-            .block-container,
-            [data-testid="stMainBlockContainer"] {
-                padding-left: 0.10rem !important;
-                padding-right: 0.22rem !important;
-            }
+        div[data-baseweb="tab-panel"] > div > div[data-testid="stVerticalBlock"] {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
         }
 
         /* FULL-SCREEN MODE — sidebar removed entirely */
@@ -502,7 +467,7 @@ st.markdown(
             margin-bottom: 0.85rem;
         }
 
-        /* Responsive Pareto HTML tables — avoids DataFrame React resize loops */
+        /* Responsive Pareto HTML tables */
         .pareto-html-shell {
             width: 100%;
             max-width: 100%;
@@ -571,13 +536,6 @@ st.markdown(
             color: #f87171;
             background: rgba(248, 113, 113, 0.08);
             border-color: rgba(248, 113, 113, 0.22);
-        }
-
-        @media (max-width: 760px) {
-            .data-sync-caption { text-align: left; }
-            .pareto-html-table { font-size: 0.69rem; }
-            .pareto-html-table thead th,
-            .pareto-html-table tbody td { padding: 0.48rem 0.38rem; }
         }
 
         /* WORLD-CLASS EXECUTIVE HERO — ONE FLAT SURFACE */
@@ -675,29 +633,6 @@ st.markdown(
             transform: translateY(-1px);
         }
 
-        @media (max-width: 760px) {
-            .hero-shell {
-                padding: 18px 16px 20px 18px;
-                border-radius: 15px;
-                margin-bottom: 0.82rem;
-            }
-
-            .hero-kicker {
-                font-size: 0.60rem;
-                margin-bottom: 8px !important;
-            }
-
-            .hero-title {
-                font-size: clamp(1.35rem, 6.6vw, 1.90rem);
-                margin-bottom: 10px !important;
-            }
-
-            .hero-subtitle {
-                font-size: 0.78rem;
-                line-height: 1.50 !important;
-            }
-        }
-
         /* SECTION HEADINGS */
         .section-heading {
             display: grid;
@@ -738,35 +673,12 @@ st.markdown(
             align-content: center;
         }
 
-        @media (max-width: 1120px) {
-            .trend-heading-inline {
-                grid-template-columns: auto minmax(0, 1fr);
-            }
-
-            .trend-heading-inline .subtitle {
-                grid-column: 2;
-                text-align: left;
-            }
-        }
-
-        @media (max-width: 760px) {
-            .section-heading {
-                grid-template-columns: auto minmax(0, 1fr);
-                align-items: start;
-            }
-
-            .section-heading .subtitle {
-                grid-column: 2;
-                text-align: left;
-                font-size: 0.70rem;
-            }
-        }
-
         /* EXECUTIVE KPI CARDS */
         .metric-card,
         .metric-card-base {
             position: relative;
             box-sizing: border-box;
+            width: 100%;
             min-width: 0;
             min-height: 120px;
             height: 100%;
@@ -2748,7 +2660,7 @@ with tab_procurements:
     with proc_col1:
         st.markdown(
             """
-            <div class='metric-card' style='min-height: 250px;'>
+            <div class='metric-card' style='min-height: 250px; width: 100%;'>
                 <div class='metric-header'>
                     <span style='color: #6366f1; font-weight: 900; font-size: 1.1rem;'>🏍️ MOTORCYCLE UNITS</span>
                 </div>
@@ -2768,7 +2680,7 @@ with tab_procurements:
     with proc_col2:
         st.markdown(
             """
-            <div class='metric-card' style='min-height: 250px;'>
+            <div class='metric-card' style='min-height: 250px; width: 100%;'>
                 <div class='metric-header'>
                     <span style='color: #10b981; font-weight: 900; font-size: 1.1rem;'>⚙️ SPARE PARTS</span>
                 </div>
