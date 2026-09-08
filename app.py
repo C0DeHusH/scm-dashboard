@@ -380,102 +380,267 @@ st.markdown(
             border-right: 1px solid rgba(148,163,184,0.16);
         }
 
-        /* Executive header scrolls naturally with the page. */
+        /* ---------- World-class executive hero ---------- */
+        /*
+         * The hero remains part of the normal document flow (not sticky).
+         * A grid layout, min-width:0 and isolated text blocks prevent overlap
+         * across desktop, tablet and mobile widths.
+         */
         div[data-testid="stElementContainer"]:has(.hero-shell),
         div.element-container:has(.hero-shell) {
-            position: static;
-            top: auto;
-            z-index: auto;
-            margin-bottom: 0.55rem;
+            position: static !important;
+            inset: auto !important;
+            z-index: auto !important;
+            width: 100% !important;
+            margin: 0 0 0.85rem 0 !important;
+            overflow: visible !important;
         }
 
         .hero-shell {
+            position: relative;
             box-sizing: border-box;
             width: 100%;
-            border: 1px solid rgba(99, 102, 241, 0.34);
-            border-radius: 16px;
-            padding: 12px 18px 13px 18px;
-            background: rgba(15, 23, 42, 0.96);
-            background-image: linear-gradient(
-                135deg,
-                rgba(79, 70, 229, 0.20),
-                rgba(14, 165, 233, 0.10) 55%,
-                rgba(16, 185, 129, 0.07)
-            );
-            box-shadow: 0 10px 28px rgba(15, 23, 42, 0.22);
-            backdrop-filter: blur(14px);
-            -webkit-backdrop-filter: blur(14px);
-            overflow: visible;
+            min-width: 0;
+            isolation: isolate;
+            overflow: hidden;
+            border: 1px solid rgba(129, 140, 248, 0.30);
+            border-radius: 22px;
+            padding: clamp(20px, 2.2vw, 32px) clamp(20px, 2.8vw, 42px);
+            background:
+                radial-gradient(circle at 84% 20%, rgba(56,189,248,0.16), transparent 24rem),
+                radial-gradient(circle at 5% 10%, rgba(99,102,241,0.22), transparent 28rem),
+                linear-gradient(135deg, #0b1220 0%, #111a2d 46%, #0f172a 100%);
+            box-shadow:
+                0 22px 55px rgba(2, 6, 23, 0.28),
+                inset 0 1px 0 rgba(255,255,255,0.06);
         }
 
-        .hero-kicker,
-        .hero-title,
-        .hero-subtitle {
-            display: block;
-            max-width: 100%;
-            white-space: normal;
-            overflow-wrap: break-word;
-            word-break: normal;
+        .hero-shell::before {
+            content: "";
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: 5px;
+            background: linear-gradient(180deg, #818cf8, #38bdf8 55%, #34d399);
+            opacity: 0.95;
+            z-index: 0;
+        }
+
+        .hero-shell::after {
+            content: "";
+            position: absolute;
+            right: -70px;
+            top: -95px;
+            width: 240px;
+            height: 240px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.055);
+            box-shadow:
+                0 0 0 34px rgba(255,255,255,0.020),
+                0 0 0 68px rgba(255,255,255,0.012);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .hero-grid {
+            position: relative;
+            z-index: 1;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(210px, 0.34fr);
+            gap: clamp(22px, 4vw, 56px);
+            align-items: center;
+            width: 100%;
+            min-width: 0;
+        }
+
+        .hero-copy,
+        .hero-side {
+            min-width: 0;
+        }
+
+        .hero-copy {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
         .hero-kicker {
-            color: #a5b4fc;
-            font-size: clamp(0.64rem, 0.72vw, 0.74rem);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            width: fit-content;
+            max-width: 100%;
+            color: #c7d2fe;
+            font-size: clamp(0.66rem, 0.70vw, 0.76rem);
             font-weight: 800;
-            line-height: 1.35;
-            letter-spacing: 0.10em;
+            line-height: 1.3;
+            letter-spacing: 0.12em;
             text-transform: uppercase;
-            margin: 0 0 3px 0;
+            margin: 0 0 10px 0;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        .hero-kicker::before {
+            content: "";
+            flex: 0 0 auto;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #34d399;
+            box-shadow: 0 0 0 4px rgba(52,211,153,0.13);
         }
 
         .hero-title {
+            display: block;
+            width: 100%;
+            max-width: 980px;
+            min-width: 0;
             color: #f8fafc;
-            font-size: clamp(1.20rem, 2.15vw, 1.82rem);
+            font-size: clamp(1.65rem, 3.15vw, 3.15rem);
             font-weight: 900;
-            line-height: 1.18;
-            letter-spacing: -0.02em;
+            line-height: 1.06;
+            letter-spacing: -0.035em;
             margin: 0;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: normal;
+            text-wrap: balance;
         }
 
         .hero-subtitle {
+            display: block;
+            width: 100%;
+            max-width: 900px;
+            min-width: 0;
             color: #cbd5e1;
-            font-size: clamp(0.72rem, 0.95vw, 0.88rem);
-            line-height: 1.42;
-            margin: 5px 0 0 0;
+            font-size: clamp(0.82rem, 1.05vw, 1.02rem);
+            font-weight: 500;
+            line-height: 1.65;
+            margin: 14px 0 0 0;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: normal;
         }
 
-        @media (max-width: 900px) {
+        .hero-side {
+            display: grid;
+            gap: 10px;
+            align-content: center;
+        }
+
+        .hero-side-card {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+            padding: 11px 13px;
+            border: 1px solid rgba(148,163,184,0.16);
+            border-radius: 13px;
+            background: rgba(255,255,255,0.035);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
+        }
+
+        .hero-side-icon {
+            display: grid;
+            place-items: center;
+            flex: 0 0 32px;
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+            background: rgba(99,102,241,0.16);
+            color: #c7d2fe;
+            font-size: 0.82rem;
+            font-weight: 900;
+        }
+
+        .hero-side-copy {
+            min-width: 0;
+        }
+
+        .hero-side-label {
+            display: block;
+            color: #94a3b8;
+            font-size: 0.61rem;
+            font-weight: 800;
+            letter-spacing: 0.09em;
+            text-transform: uppercase;
+            line-height: 1.2;
+            margin-bottom: 2px;
+        }
+
+        .hero-side-value {
+            display: block;
+            color: #f8fafc;
+            font-size: 0.78rem;
+            font-weight: 800;
+            line-height: 1.28;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        @media (max-width: 1050px) {
+            .hero-grid {
+                grid-template-columns: minmax(0, 1fr);
+                gap: 18px;
+            }
+
+            .hero-side {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 760px) {
             .hero-shell {
-                padding: 10px 13px 11px 13px;
-                border-radius: 13px;
-            }
-
-            .hero-kicker {
-                letter-spacing: 0.07em;
-            }
-        }
-
-        @media (max-width: 600px) {
-            .hero-kicker {
-                font-size: 0.60rem;
+                border-radius: 17px;
+                padding: 18px 16px 19px 18px;
             }
 
             .hero-title {
-                font-size: 1.05rem;
+                font-size: clamp(1.42rem, 7vw, 2.15rem);
+                line-height: 1.10;
             }
 
             .hero-subtitle {
-                font-size: 0.68rem;
-                line-height: 1.35;
+                font-size: 0.82rem;
+                line-height: 1.55;
+                margin-top: 10px;
+            }
+
+            .hero-side {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+        }
+
+        @media (max-width: 420px) {
+            .hero-shell {
+                padding: 16px 13px 16px 16px;
+            }
+
+            .hero-kicker {
+                font-size: 0.60rem;
+                letter-spacing: 0.08em;
+                margin-bottom: 8px;
+            }
+
+            .hero-title {
+                font-size: 1.32rem;
+            }
+
+            .hero-subtitle {
+                font-size: 0.76rem;
+                line-height: 1.50;
             }
         }
 
         /* ---------- Section labels ---------- */
         .section-heading {
-            display: flex;
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) minmax(0, auto);
             align-items: center;
             gap: 10px;
-            margin: 0.35rem 0 0.75rem 0;
+            margin: 0.45rem 0 0.85rem 0;
+            min-width: 0;
         }
 
         .section-heading .dot {
@@ -494,7 +659,23 @@ st.markdown(
         .section-heading .subtitle {
             color: #94a3b8;
             font-size: 0.78rem;
-            margin-left: auto;
+            margin-left: 0;
+            text-align: right;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        @media (max-width: 760px) {
+            .section-heading {
+                grid-template-columns: auto minmax(0, 1fr);
+                align-items: start;
+            }
+
+            .section-heading .subtitle {
+                grid-column: 2;
+                text-align: left;
+                font-size: 0.72rem;
+            }
         }
 
         /* ---------- KPI cards ---------- */
@@ -690,10 +871,37 @@ st.markdown(
 st.markdown(
     """
     <div class="hero-shell">
-        <div class="hero-kicker">Supply Chain Management • Executive Analytics</div>
-        <div class="hero-title">MUTI MC SCM Executive Control Tower</div>
-        <div class="hero-subtitle">
-            Inventory visibility, Pareto risk prioritization, stockout trends, Days of Inventory, and branch-level action monitoring.
+        <div class="hero-grid">
+            <div class="hero-copy">
+                <div class="hero-kicker">Supply Chain Management • Executive Analytics</div>
+                <div class="hero-title">MUTI MC SCM Executive Control Tower</div>
+                <div class="hero-subtitle">
+                    Inventory visibility, Pareto risk prioritization, stockout trends, Days of Inventory, and branch-level action monitoring.
+                </div>
+            </div>
+            <div class="hero-side" aria-label="Dashboard capabilities">
+                <div class="hero-side-card">
+                    <div class="hero-side-icon">01</div>
+                    <div class="hero-side-copy">
+                        <span class="hero-side-label">Visibility</span>
+                        <span class="hero-side-value">Network-wide inventory intelligence</span>
+                    </div>
+                </div>
+                <div class="hero-side-card">
+                    <div class="hero-side-icon">02</div>
+                    <div class="hero-side-copy">
+                        <span class="hero-side-label">Risk</span>
+                        <span class="hero-side-value">Pareto-led stockout prioritization</span>
+                    </div>
+                </div>
+                <div class="hero-side-card">
+                    <div class="hero-side-icon">03</div>
+                    <div class="hero-side-copy">
+                        <span class="hero-side-label">Action</span>
+                        <span class="hero-side-value">Branch-level transfer monitoring</span>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     """,
