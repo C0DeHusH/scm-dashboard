@@ -942,11 +942,8 @@ st.markdown(
 st.markdown(
     """
     <div class="hero-shell">
-     <br>
-    <br>
-        <div class="hero-grid">
+        <div class="hero-grid"><br>
             <div class="hero-copy">
-               
                 <div class="hero-kicker">Supply Chain Management • Executive Analytics</div>
                 <div class="hero-title">MUTI MC SCM Executive Control Tower</div>
                 <div class="hero-subtitle">
