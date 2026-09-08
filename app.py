@@ -7,6 +7,7 @@ import os
 import io
 import requests
 import hashlib
+import html
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, datetime
 from urllib.parse import quote
@@ -422,43 +423,124 @@ st.markdown(
             display: none !important;
         }
 
-        /* Inline workbook import beside MUTI MC Trends */
+        /* Import action beside MUTI MC Trends */
         .trend-import-label {
             display: block;
-            margin: 0 0 0.28rem 0;
+            margin: 0 0 0.35rem 0;
             color: var(--scm-muted);
             font-size: 0.66rem;
             font-weight: 850;
             line-height: 1.2;
             letter-spacing: 0.08em;
             text-transform: uppercase;
+            text-align: right;
         }
 
-        div[data-testid="stFileUploader"] {
-            width: 100% !important;
-            margin: 0 !important;
+        /* Streamlit buttons — executive treatment */
+        div[data-testid="stButton"] > button {
+            min-height: 42px;
+            border-radius: 11px;
+            font-weight: 800;
+            letter-spacing: 0.01em;
+            border: 1px solid rgba(99, 102, 241, 0.34);
+            box-shadow: 0 5px 14px rgba(15, 23, 42, 0.06);
         }
 
-        div[data-testid="stFileUploader"] section {
-            min-height: 62px !important;
-            padding: 0.38rem 0.58rem !important;
-            border-radius: 12px !important;
-            border: 1px dashed rgba(99, 102, 241, 0.42) !important;
+        /* Upload dialog */
+        div[data-testid="stDialog"] [data-testid="stFileUploader"] section {
+            min-height: 118px !important;
+            border-radius: 14px !important;
+            border: 1px dashed rgba(99, 102, 241, 0.48) !important;
             background: rgba(99, 102, 241, 0.035) !important;
         }
 
-        div[data-testid="stFileUploader"] section > div {
-            min-width: 0 !important;
+        .import-dialog-note {
+            padding: 0.72rem 0.85rem;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            border-radius: 12px;
+            background: rgba(148, 163, 184, 0.035);
+            color: var(--scm-muted);
+            font-size: 0.78rem;
+            line-height: 1.5;
+            margin-bottom: 0.85rem;
         }
 
-        div[data-testid="stFileUploader"] small {
-            font-size: 0.64rem !important;
+        /* Responsive Pareto HTML tables — avoids DataFrame React resize loops */
+        .pareto-html-shell {
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            overflow: hidden;
+            border: 1px solid var(--scm-border);
+            border-radius: 12px;
         }
 
-        @media (max-width: 900px) {
-            div[data-testid="stFileUploader"] section {
-                min-height: 58px !important;
-            }
+        .pareto-html-table {
+            width: 100%;
+            max-width: 100%;
+            table-layout: fixed;
+            border-collapse: collapse;
+            font-size: 0.78rem;
+        }
+
+        .pareto-html-table thead th {
+            padding: 0.62rem 0.56rem;
+            text-align: left;
+            font-size: 0.67rem;
+            font-weight: 850;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: var(--scm-muted);
+            background: rgba(148, 163, 184, 0.055);
+            border-bottom: 1px solid var(--scm-border);
+        }
+
+        .pareto-html-table tbody td {
+            padding: 0.60rem 0.56rem;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.11);
+            vertical-align: middle;
+            overflow-wrap: anywhere;
+            word-break: normal;
+        }
+
+        .pareto-html-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .pareto-html-table tbody tr:hover {
+            background: rgba(99, 102, 241, 0.035);
+        }
+
+        .pareto-html-table .num {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+
+        .pareto-status {
+            display: inline-flex;
+            align-items: center;
+            max-width: 100%;
+            padding: 3px 7px;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.20);
+            font-size: 0.67rem;
+            font-weight: 800;
+            line-height: 1.2;
+            white-space: normal;
+        }
+
+        .pareto-status.stockout {
+            color: #f87171;
+            background: rgba(248, 113, 113, 0.08);
+            border-color: rgba(248, 113, 113, 0.22);
+        }
+
+        @media (max-width: 760px) {
+            .trend-import-label { text-align: left; }
+            .pareto-html-table { font-size: 0.69rem; }
+            .pareto-html-table thead th,
+            .pareto-html-table tbody td { padding: 0.48rem 0.38rem; }
         }
 
         /* WORLD-CLASS EXECUTIVE HERO — ONE FLAT SURFACE */
@@ -783,21 +865,6 @@ st.markdown(
             border-radius: 10px;
         }
 
-        div[data-testid="stDataFrame"] {
-            width: 100% !important;
-            min-width: 0 !important;
-            max-width: 100% !important;
-            border: 1px solid var(--scm-border);
-            border-radius: 11px;
-            overflow: hidden !important;
-        }
-
-        div[data-testid="stDataFrame"] > div {
-            width: 100% !important;
-            max-width: 100% !important;
-            min-width: 0 !important;
-        }
-
         /* PARETO ACTION PANELS */
         .pareto-panel-spacer {
             height: 0.28rem;
@@ -1115,16 +1182,107 @@ def process_excel_file(file_path_or_buffer):
 
 # =========================================================
 # 4. DATA SYNCHRONIZATION & PERSISTENCE
-#    Sidebar removed: import is beside MUTI MC Trends.
+#    Sidebar removed. Import opens in a modal dialog.
 # =========================================================
 cloud_config = get_cloud_storage_config()
 saved_workbook_bytes, storage_source = initialize_persistent_workbook()
 
 
+def persist_uploaded_workbook(uploaded_bytes):
+    """Validate and persist one uploaded workbook. Returns a success message."""
+    # Full workbook validation happens before any persistent copy is replaced.
+    process_excel_file(io.BytesIO(uploaded_bytes))
+
+    persistence_messages = []
+
+    try:
+        save_local_cache(uploaded_bytes)
+        persistence_messages.append("local cache")
+    except Exception as exc:
+        # Local cache is operational fallback only; cloud may still succeed.
+        st.warning(f"Local cache could not be updated: {exc}")
+
+    new_storage_source = "Local cache"
+    if cloud_config["configured"]:
+        upload_cloud_workbook(uploaded_bytes)
+        new_storage_source = "Cloud • Supabase"
+        persistence_messages.append("Supabase cloud storage")
+
+    st.session_state["scm_workbook_bytes"] = uploaded_bytes
+    st.session_state["scm_storage_source"] = new_storage_source
+
+    destination_text = (
+        " + ".join(persistence_messages)
+        if persistence_messages
+        else "active dashboard session"
+    )
+    return f"SCM workbook validated and saved to {destination_text}."
+
+
+@st.dialog("Import SCM Data", width="large")
+def import_scm_dialog():
+    st.markdown(
+        """
+        <div class="import-dialog-note">
+            Upload the latest SCM Excel workbook. The file is validated first and
+            only then replaces the active persistent dataset. Expected sheets:
+            <b>Raw_Data</b>, <b>KPI_YTD_Input</b>, and <b>KPI_Weekly_Input</b>.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    dialog_file = st.file_uploader(
+        "Select SCM Excel workbook",
+        type=["xlsx", "xls"],
+        help="Use a genuine Microsoft Excel workbook.",
+        key="scm_dialog_uploader",
+    )
+
+    if dialog_file is None:
+        st.caption("Choose a file, then click Validate & Import.")
+        return
+
+    file_bytes = dialog_file.getvalue()
+    file_size_mb = len(file_bytes) / (1024 * 1024)
+    st.caption(f"Selected: {dialog_file.name} • {file_size_mb:.2f} MB")
+
+    action_col, info_col = st.columns([1.25, 2.75], gap="small")
+    with action_col:
+        do_import = st.button(
+            "Validate & Import",
+            type="primary",
+            use_container_width=True,
+            key="scm_dialog_import_button",
+        )
+    with info_col:
+        st.caption(
+            "The previous persisted workbook is retained if validation or cloud upload fails."
+        )
+
+    if do_import:
+        upload_hash = hashlib.sha256(file_bytes).hexdigest()
+        if st.session_state.get("scm_last_successful_upload_hash") == upload_hash:
+            st.info("This exact workbook is already the active dataset.")
+            return
+
+        try:
+            with st.spinner("Validating workbook and updating dashboard data..."):
+                success_message = persist_uploaded_workbook(file_bytes)
+        except Exception as exc:
+            st.error(f"Import failed: {exc}")
+            return
+
+        st.session_state["scm_last_successful_upload_hash"] = upload_hash
+        st.session_state["scm_import_success"] = success_message
+        st.cache_data.clear()
+        st.rerun()
+
+
 # =========================================================
-# 4A. MUTI MC TRENDS HEADER + INLINE IMPORT
+# 4A. MUTI MC TRENDS HEADER + IMPORT BUTTON
 # =========================================================
-trend_title_col, trend_import_col = st.columns([4.85, 1.15], gap="small")
+trend_title_col, trend_import_col = st.columns([5.15, 0.85], gap="small")
 
 with trend_title_col:
     st.markdown(
@@ -1140,67 +1298,20 @@ with trend_title_col:
 
 with trend_import_col:
     st.markdown(
-        '<span class="trend-import-label">Import latest SCM workbook</span>',
+        '<span class="trend-import-label">Data Management</span>',
         unsafe_allow_html=True,
     )
-    uploaded_file = st.file_uploader(
-        "Upload SCM Excel",
-        type=["xlsx", "xls"],
-        help="Expected sheets: Raw_Data, KPI_YTD_Input, KPI_Weekly_Input",
-        label_visibility="collapsed",
-        key="scm_inline_uploader",
-    )
+    if st.button(
+        "Import SCM Data",
+        type="primary",
+        use_container_width=True,
+        key="open_scm_import_dialog",
+    ):
+        import_scm_dialog()
 
-if uploaded_file is not None:
-    uploaded_bytes = uploaded_file.getvalue()
-    upload_hash = hashlib.sha256(uploaded_bytes).hexdigest()
-    already_processed = (
-        st.session_state.get("scm_last_upload_hash") == upload_hash
-    )
-
-    if not already_processed:
-        try:
-            process_excel_file(io.BytesIO(uploaded_bytes))
-        except Exception as exc:
-            st.error(f"Upload rejected: {exc}")
-            st.session_state["scm_last_upload_hash"] = upload_hash
-        else:
-            persistence_messages = []
-
-            try:
-                save_local_cache(uploaded_bytes)
-                persistence_messages.append("local cache")
-            except Exception as exc:
-                st.warning(f"Local cache could not be updated: {exc}")
-
-            if cloud_config["configured"]:
-                try:
-                    upload_cloud_workbook(uploaded_bytes)
-                    storage_source = "Cloud • Supabase"
-                    persistence_messages.append("Supabase cloud storage")
-                except Exception as exc:
-                    st.error(
-                        "Workbook was validated, but cloud persistence failed. "
-                        f"The previous cloud workbook remains unchanged. Details: {exc}"
-                    )
-                    storage_source = "Local cache"
-            else:
-                storage_source = "Local cache"
-
-            st.session_state["scm_workbook_bytes"] = uploaded_bytes
-            st.session_state["scm_storage_source"] = storage_source
-            st.session_state["scm_last_upload_hash"] = upload_hash
-            saved_workbook_bytes = uploaded_bytes
-            st.cache_data.clear()
-
-            if persistence_messages:
-                st.success(
-                    "SCM workbook updated and saved to "
-                    + " + ".join(persistence_messages)
-                    + "."
-                )
-else:
-    st.session_state.pop("scm_last_upload_hash", None)
+import_success = st.session_state.pop("scm_import_success", None)
+if import_success:
+    st.success(import_success)
 
 if st.session_state.get("scm_cloud_warning"):
     with st.expander("Cloud storage connection notice"):
@@ -1213,7 +1324,7 @@ if st.session_state.get("scm_local_warning"):
 
 if saved_workbook_bytes is None:
     st.info(
-        "Upload your SCM Excel workbook using the import control beside MUTI MC Trends. "
+        "Click Import SCM Data beside MUTI MC Trends to upload your workbook. "
         "For online deployment, configure Supabase secrets so the last uploaded workbook "
         "survives server restarts and redeployments."
     )
@@ -2095,21 +2206,40 @@ def render_pareto_table(df, pareto_class, hex_color):
     final_df = class_df[display_cols].copy()
     final_df.columns = ["Rank", "Model", "Status", "Inventory", "Transfer", "DOI"]
 
-    st.markdown("<div class='pareto-table-shell'>", unsafe_allow_html=True)
-    st.dataframe(
-        final_df,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Rank": st.column_config.NumberColumn("Rank", format="%d", width="small"),
-            "Model": st.column_config.TextColumn("Model", width="medium"),
-            "Status": st.column_config.TextColumn("Status", width="medium"),
-            "Inventory": st.column_config.NumberColumn("Inventory", format="%.0f", width="small"),
-            "Transfer": st.column_config.NumberColumn("Transfer", format="%.0f", width="small"),
-            "DOI": st.column_config.NumberColumn("DOI", format="%.0f", width="small"),
-        },
+    rows_html = []
+    for _, row in final_df.iterrows():
+        status_text = str(row["Status"])
+        status_class = " stockout" if status_text.strip().lower() == "stockout" else ""
+        rows_html.append(
+            "<tr>"
+            f"<td class='num'>{int(row['Rank'])}</td>"
+            f"<td>{html.escape(str(row['Model']))}</td>"
+            f"<td><span class='pareto-status{status_class}'>{html.escape(status_text)}</span></td>"
+            f"<td class='num'>{int(row['Inventory']):,}</td>"
+            f"<td class='num'>{int(row['Transfer']):,}</td>"
+            f"<td class='num'>{int(row['DOI']):,}</td>"
+            "</tr>"
+        )
+
+    table_html = (
+        "<div class='pareto-html-shell'>"
+        "<table class='pareto-html-table'>"
+        "<colgroup>"
+        "<col style='width:7%'>"
+        "<col style='width:35%'>"
+        "<col style='width:16%'>"
+        "<col style='width:14%'>"
+        "<col style='width:14%'>"
+        "<col style='width:14%'>"
+        "</colgroup>"
+        "<thead><tr>"
+        "<th class='num'>Rank</th><th>Model</th><th>Status</th>"
+        "<th class='num'>Inventory</th><th class='num'>Transfer</th><th class='num'>DOI</th>"
+        "</tr></thead>"
+        "<tbody>" + "".join(rows_html) + "</tbody>"
+        "</table></div>"
     )
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown(table_html, unsafe_allow_html=True)
 
 
 # Full-width stacked Pareto panels eliminate horizontal scrolling and keep
@@ -2125,5 +2255,5 @@ for pareto_class, pareto_color in [
 
 st.markdown("<br>", unsafe_allow_html=True)
 st.caption(
-    "SCM Executive Control Tower • Full-width executive UI • Half-up rounding • January-aware YTD • Weekly actual-data dates only • Cloud persistence ready."
+    "SCM Executive Control Tower • Full-width executive UI • Modal data import • React-safe Pareto tables • Half-up rounding • January-aware YTD • Weekly actual-data dates only • Cloud persistence ready."
 )
