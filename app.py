@@ -940,11 +940,10 @@ st.markdown(
 
 
 st.markdown(
-
     """
-    <br>
-    <br>
     <div class="hero-shell">
+     <br>
+    <br>
         <div class="hero-grid">
             <div class="hero-copy">
                
