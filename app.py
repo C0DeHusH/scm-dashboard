@@ -326,7 +326,7 @@ st.set_page_config(
     page_title="SCM Executive Control Tower",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 # =========================================================
@@ -416,45 +416,49 @@ st.markdown(
             }
         }
 
-        /* COMPACT CONTROL CENTER */
-        [data-testid="stSidebar"] {
-            width: 244px !important;
-            min-width: 244px !important;
-            border-right: 1px solid var(--scm-border);
-            box-shadow: 7px 0 24px rgba(2, 6, 23, 0.035);
+        /* FULL-SCREEN MODE — sidebar removed entirely */
+        [data-testid="stSidebar"],
+        [data-testid="collapsedControl"] {
+            display: none !important;
         }
 
-        [data-testid="stSidebar"] > div:first-child {
-            width: 244px !important;
-            min-width: 244px !important;
+        /* Inline workbook import beside MUTI MC Trends */
+        .trend-import-label {
+            display: block;
+            margin: 0 0 0.28rem 0;
+            color: var(--scm-muted);
+            font-size: 0.66rem;
+            font-weight: 850;
+            line-height: 1.2;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
         }
 
-        [data-testid="stSidebar"] * {
-            box-sizing: border-box;
+        div[data-testid="stFileUploader"] {
+            width: 100% !important;
+            margin: 0 !important;
         }
 
-        [data-testid="stSidebar"] [data-testid="stMarkdownContainer"],
-        [data-testid="stSidebar"] p,
-        [data-testid="stSidebar"] li,
-        [data-testid="stSidebar"] span {
-            overflow-wrap: anywhere;
-            word-break: normal;
-        }
-
-        [data-testid="stSidebar"] h2 {
-            font-size: 1.18rem !important;
-            line-height: 1.20 !important;
-            margin-bottom: 0.45rem !important;
-        }
-
-        [data-testid="stSidebar"] [data-testid="stFileUploader"] {
-            margin-top: 0.55rem;
-            margin-bottom: 0.70rem;
-        }
-
-        [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
-            min-height: 86px;
+        div[data-testid="stFileUploader"] section {
+            min-height: 62px !important;
+            padding: 0.38rem 0.58rem !important;
             border-radius: 12px !important;
+            border: 1px dashed rgba(99, 102, 241, 0.42) !important;
+            background: rgba(99, 102, 241, 0.035) !important;
+        }
+
+        div[data-testid="stFileUploader"] section > div {
+            min-width: 0 !important;
+        }
+
+        div[data-testid="stFileUploader"] small {
+            font-size: 0.64rem !important;
+        }
+
+        @media (max-width: 900px) {
+            div[data-testid="stFileUploader"] section {
+                min-height: 58px !important;
+            }
         }
 
         /* WORLD-CLASS EXECUTIVE HERO — ONE FLAT SURFACE */
@@ -583,6 +587,23 @@ st.markdown(
             text-align: right;
             white-space: normal;
             overflow-wrap: anywhere;
+        }
+
+        .trend-heading-inline {
+            min-height: 62px;
+            margin: 0.20rem 0 0.18rem 0 !important;
+            align-content: center;
+        }
+
+        @media (max-width: 1120px) {
+            .trend-heading-inline {
+                grid-template-columns: auto minmax(0, 1fr);
+            }
+
+            .trend-heading-inline .subtitle {
+                grid-column: 2;
+                text-align: left;
+            }
         }
 
         @media (max-width: 760px) {
@@ -1093,124 +1114,108 @@ def process_excel_file(file_path_or_buffer):
 
 
 # =========================================================
-# 4. SIDEBAR / DATA SYNCHRONIZATION & PERSISTENCE
+# 4. DATA SYNCHRONIZATION & PERSISTENCE
+#    Sidebar removed: import is beside MUTI MC Trends.
 # =========================================================
 cloud_config = get_cloud_storage_config()
 saved_workbook_bytes, storage_source = initialize_persistent_workbook()
 
-with st.sidebar:
-    st.markdown("## SCM Control Center")
-    st.caption(
-        "Upload the latest SCM workbook. The newest successful upload "
-        "becomes the dashboard's active persistent dataset."
+
+# =========================================================
+# 4A. MUTI MC TRENDS HEADER + INLINE IMPORT
+# =========================================================
+trend_title_col, trend_import_col = st.columns([4.85, 1.15], gap="small")
+
+with trend_title_col:
+    st.markdown(
+        """
+        <div class="section-heading trend-heading-inline">
+            <span class="dot"></span>
+            <span class="title">MUTI MC Trends</span>
+            <span class="subtitle">YTD begins with January when January data exists • Weekly shows actual data dates only</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-    if cloud_config["configured"]:
-        st.success("Cloud persistence: Connected")
-        st.caption(
-            f"Supabase bucket: {cloud_config['bucket']}  \n"
-            f"Object: {cloud_config['object_name']}"
-        )
-    else:
-        st.warning("Cloud persistence: Not configured")
-        st.caption(
-            "Local cache works for development, but a hosted app may lose "
-            "local files after a restart or redeploy."
-        )
-
+with trend_import_col:
+    st.markdown(
+        '<span class="trend-import-label">Import latest SCM workbook</span>',
+        unsafe_allow_html=True,
+    )
     uploaded_file = st.file_uploader(
         "Upload SCM Excel",
         type=["xlsx", "xls"],
         help="Expected sheets: Raw_Data, KPI_YTD_Input, KPI_Weekly_Input",
+        label_visibility="collapsed",
+        key="scm_inline_uploader",
     )
 
-    if uploaded_file is not None:
-        uploaded_bytes = uploaded_file.getvalue()
-        upload_hash = hashlib.sha256(uploaded_bytes).hexdigest()
-        already_processed = (
-            st.session_state.get("scm_last_upload_hash") == upload_hash
-        )
+if uploaded_file is not None:
+    uploaded_bytes = uploaded_file.getvalue()
+    upload_hash = hashlib.sha256(uploaded_bytes).hexdigest()
+    already_processed = (
+        st.session_state.get("scm_last_upload_hash") == upload_hash
+    )
 
-        # Streamlit keeps the uploaded file in widget state across reruns.
-        # Process each unique upload once so filters do not repeatedly write
-        # the same workbook to cloud storage.
-        if not already_processed:
-            # Validate the workbook before replacing the persisted copy.
+    if not already_processed:
+        try:
+            process_excel_file(io.BytesIO(uploaded_bytes))
+        except Exception as exc:
+            st.error(f"Upload rejected: {exc}")
+            st.session_state["scm_last_upload_hash"] = upload_hash
+        else:
+            persistence_messages = []
+
             try:
-                process_excel_file(io.BytesIO(uploaded_bytes))
+                save_local_cache(uploaded_bytes)
+                persistence_messages.append("local cache")
             except Exception as exc:
-                st.error(f"Upload rejected: {exc}")
-                st.session_state["scm_last_upload_hash"] = upload_hash
-            else:
-                persistence_messages = []
+                st.warning(f"Local cache could not be updated: {exc}")
 
-                # Always keep a local cache for local use / operational fallback.
+            if cloud_config["configured"]:
                 try:
-                    save_local_cache(uploaded_bytes)
-                    persistence_messages.append("local cache")
+                    upload_cloud_workbook(uploaded_bytes)
+                    storage_source = "Cloud • Supabase"
+                    persistence_messages.append("Supabase cloud storage")
                 except Exception as exc:
-                    st.warning(f"Local cache could not be updated: {exc}")
-
-                if cloud_config["configured"]:
-                    try:
-                        upload_cloud_workbook(uploaded_bytes)
-                        storage_source = "Cloud • Supabase"
-                        persistence_messages.append("Supabase cloud storage")
-                    except Exception as exc:
-                        st.error(
-                            "Workbook was validated, but cloud persistence failed. "
-                            f"The previous cloud workbook remains unchanged. Details: {exc}"
-                        )
-                        storage_source = "Local cache"
-                else:
-                    storage_source = "Local cache"
-
-                st.session_state["scm_workbook_bytes"] = uploaded_bytes
-                st.session_state["scm_storage_source"] = storage_source
-                st.session_state["scm_last_upload_hash"] = upload_hash
-                saved_workbook_bytes = uploaded_bytes
-                st.cache_data.clear()
-
-                if persistence_messages:
-                    st.success(
-                        "SCM workbook updated and saved to "
-                        + " + ".join(persistence_messages)
-                        + "."
+                    st.error(
+                        "Workbook was validated, but cloud persistence failed. "
+                        f"The previous cloud workbook remains unchanged. Details: {exc}"
                     )
-    else:
-        # Clearing the uploader allows the same file to be intentionally
-        # uploaded again later in the same browser session.
-        st.session_state.pop("scm_last_upload_hash", None)
+                    storage_source = "Local cache"
+            else:
+                storage_source = "Local cache"
 
-    if st.session_state.get("scm_cloud_warning"):
-        with st.expander("Cloud storage connection notice"):
-            st.caption(st.session_state["scm_cloud_warning"])
+            st.session_state["scm_workbook_bytes"] = uploaded_bytes
+            st.session_state["scm_storage_source"] = storage_source
+            st.session_state["scm_last_upload_hash"] = upload_hash
+            saved_workbook_bytes = uploaded_bytes
+            st.cache_data.clear()
 
-    if st.session_state.get("scm_local_warning"):
-        with st.expander("Local workbook notice"):
-            st.caption(st.session_state["scm_local_warning"])
+            if persistence_messages:
+                st.success(
+                    "SCM workbook updated and saved to "
+                    + " + ".join(persistence_messages)
+                    + "."
+                )
+else:
+    st.session_state.pop("scm_last_upload_hash", None)
 
-    st.markdown("---")
-    st.caption("Dashboard navigation")
-    st.markdown(
-        "1. **MUTI MC Trends**  \n"
-        "2. **Network Scope**  \n"
-        "3. **Performance Overview**  \n"
-        "4. **Average OOS per Area**  \n"
-        "5. **Branch-Level Actions**"
-    )
+if st.session_state.get("scm_cloud_warning"):
+    with st.expander("Cloud storage connection notice"):
+        st.caption(st.session_state["scm_cloud_warning"])
 
-    st.markdown("---")
-    st.caption("Rounding standard")
-    st.markdown("**0.0–0.4 ↓** • **0.5–0.9 ↑**")
-    st.caption("Example: 8.4 → 8 • 8.5 → 9")
+if st.session_state.get("scm_local_warning"):
+    with st.expander("Local workbook notice"):
+        st.caption(st.session_state["scm_local_warning"])
 
 
 if saved_workbook_bytes is None:
     st.info(
-        "👈 Upload your SCM Excel workbook to begin. "
-        "For online deployment, configure Supabase secrets so the last "
-        "uploaded workbook survives server restarts and redeployments."
+        "Upload your SCM Excel workbook using the import control beside MUTI MC Trends. "
+        "For online deployment, configure Supabase secrets so the last uploaded workbook "
+        "survives server restarts and redeployments."
     )
     st.stop()
 
@@ -1648,14 +1653,9 @@ st.markdown(
 
 
 # =========================================================
-# 6. MUTI MC TRENDS — FIRST SECTION
+# 6. MUTI MC TRENDS — CONTROLS & CHARTS
 # =========================================================
-st.markdown("<br>", unsafe_allow_html=True)
-section_heading(
-    "MUTI MC Trends",
-    "YTD begins with January when January data exists • Weekly shows actual data dates only",
-)
-
+st.markdown("<div style='height:0.15rem'></div>", unsafe_allow_html=True)
 control_col1, control_col2 = st.columns([1.35, 4.65], gap="small")
 
 with control_col1:
