@@ -1219,64 +1219,6 @@ def persist_uploaded_workbook(uploaded_bytes):
     return f"SCM workbook validated and saved to {destination_text}."
 
 
-@st.dialog("Import SCM Data", width="large")
-def import_scm_dialog():
-    st.markdown(
-        """
-        <div class="import-dialog-note">
-            Upload the latest SCM Excel workbook. The file is validated first and
-            only then replaces the active persistent dataset. Expected sheets:
-            <b>Raw_Data</b>, <b>KPI_YTD_Input</b>, and <b>KPI_Weekly_Input</b>.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    dialog_file = st.file_uploader(
-        "Select SCM Excel workbook",
-        type=["xlsx", "xls"],
-        help="Use a genuine Microsoft Excel workbook.",
-        key="scm_dialog_uploader",
-    )
-
-    if dialog_file is None:
-        st.caption("Choose a file, then click Validate & Import.")
-        return
-
-    file_bytes = dialog_file.getvalue()
-    file_size_mb = len(file_bytes) / (1024 * 1024)
-    st.caption(f"Selected: {dialog_file.name} • {file_size_mb:.2f} MB")
-
-    action_col, info_col = st.columns([1.25, 2.75], gap="small")
-    with action_col:
-        do_import = st.button(
-            "Validate & Import",
-            type="primary",
-            use_container_width=True,
-            key="scm_dialog_import_button",
-        )
-    with info_col:
-        st.caption(
-            "The previous persisted workbook is retained if validation or cloud upload fails."
-        )
-
-    if do_import:
-        upload_hash = hashlib.sha256(file_bytes).hexdigest()
-        if st.session_state.get("scm_last_successful_upload_hash") == upload_hash:
-            st.info("This exact workbook is already the active dataset.")
-            return
-
-        try:
-            with st.spinner("Validating workbook and updating dashboard data..."):
-                success_message = persist_uploaded_workbook(file_bytes)
-        except Exception as exc:
-            st.error(f"Import failed: {exc}")
-            return
-
-        st.session_state["scm_last_successful_upload_hash"] = upload_hash
-        st.session_state["scm_import_success"] = success_message
-        st.cache_data.clear()
-        st.rerun()
 
 
 # =========================================================
@@ -1343,6 +1285,65 @@ except Exception as e:
         "upload a valid workbook once to replace it."
     )
     st.stop()
+
+@st.dialog("Import SCM Data", width="large")
+def import_scm_dialog():
+    st.markdown(
+        """
+        <div class="import-dialog-note">
+            Upload the latest SCM Excel workbook. The file is validated first and
+            only then replaces the active persistent dataset. Expected sheets:
+            <b>Raw_Data</b>, <b>KPI_YTD_Input</b>, and <b>KPI_Weekly_Input</b>.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    dialog_file = st.file_uploader(
+        "Select SCM Excel workbook",
+        type=["xlsx", "xls"],
+        help="Use a genuine Microsoft Excel workbook.",
+        key="scm_dialog_uploader",
+    )
+
+    if dialog_file is None:
+        st.caption("Choose a file, then click Validate & Import.")
+        return
+
+    file_bytes = dialog_file.getvalue()
+    file_size_mb = len(file_bytes) / (1024 * 1024)
+    st.caption(f"Selected: {dialog_file.name} • {file_size_mb:.2f} MB")
+
+    action_col, info_col = st.columns([1.25, 2.75], gap="small")
+    with action_col:
+        do_import = st.button(
+            "Validate & Import",
+            type="primary",
+            use_container_width=True,
+            key="scm_dialog_import_button",
+        )
+    with info_col:
+        st.caption(
+            "The previous persisted workbook is retained if validation or cloud upload fails."
+        )
+
+    if do_import:
+        upload_hash = hashlib.sha256(file_bytes).hexdigest()
+        if st.session_state.get("scm_last_successful_upload_hash") == upload_hash:
+            st.info("This exact workbook is already the active dataset.")
+            return
+
+        try:
+            with st.spinner("Validating workbook and updating dashboard data..."):
+                success_message = persist_uploaded_workbook(file_bytes)
+        except Exception as exc:
+            st.error(f"Import failed: {exc}")
+            return
+
+        st.session_state["scm_last_successful_upload_hash"] = upload_hash
+        st.session_state["scm_import_success"] = success_message
+        st.cache_data.clear()
+        st.rerun()
 
 
 # =========================================================
