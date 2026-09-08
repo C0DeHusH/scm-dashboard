@@ -336,7 +336,7 @@ st.set_page_config(
 # =========================================================
 st.markdown(
     """
-    <style><br>
+    <style>
         :root {
             --scm-navy: #0b1220;
             --scm-indigo: #6366f1;
@@ -943,7 +943,7 @@ st.markdown(
 st.markdown(
     """
     <div class="hero-shell">
-        <div class="hero-grid"><br>
+        <div class="hero-grid"><br><br>
             <div class="hero-copy">
                 <div class="hero-kicker">Supply Chain Management • Executive Analytics</div>
                 <div class="hero-title">MUTI MC SCM Executive Control Tower</div>
