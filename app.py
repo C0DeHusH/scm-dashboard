@@ -390,6 +390,17 @@ st.markdown(
             background: var(--background-color);
         }
 
+        /* TABS MAXIMIZATION - Remove native inner padding */
+        div[data-testid="stTabs"] {
+            width: 100% !important;
+            min-width: 0 !important;
+        }
+        div[data-baseweb="tab-panel"] {
+            width: 100% !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+
         /* Remove the residual left gutter Streamlit can keep beside the sidebar. */
         @media (min-width: 901px) {
             [data-testid="stMainBlockContainer"] {
@@ -2732,7 +2743,7 @@ with tab_procurements:
         "Manage purchase orders, incoming stock allocations, and supplier lead times"
     )
 
-    proc_col1, proc_col2 = st.columns(2, gap="medium")
+    proc_col1, proc_col2 = st.columns(2, gap="small")
 
     with proc_col1:
         st.markdown(
