@@ -358,27 +358,52 @@ st.markdown(
             min-width: 0 !important;
             padding-top: 0.55rem !important;
             padding-bottom: 2.25rem !important;
-            padding-left: clamp(0.22rem, 0.42vw, 0.48rem) !important;
+            padding-left: 0.06rem !important;
             padding-right: clamp(0.22rem, 0.42vw, 0.48rem) !important;
             margin: 0 !important;
         }
 
-        section[data-testid="stMain"],
+        section[data-testid="stMain"] {
+            min-width: 0 !important;
+            max-width: none !important;
+            margin-left: 0 !important;
+            padding-left: 0 !important;
+            overflow-x: clip !important;
+        }
+
         section[data-testid="stMain"] > div {
             min-width: 0 !important;
             max-width: none !important;
+            margin-left: 0 !important;
+            padding-left: 0 !important;
             overflow-x: clip !important;
+        }
+
+        [data-testid="stMainBlockContainer"] > div:first-child {
+            margin-left: 0 !important;
+            padding-left: 0 !important;
         }
 
         [data-testid="stAppViewContainer"] {
             background: var(--background-color);
         }
 
+        /* Remove the residual left gutter Streamlit can keep beside the sidebar. */
+        @media (min-width: 901px) {
+            [data-testid="stMainBlockContainer"] {
+                padding-left: 0.06rem !important;
+            }
+            section[data-testid="stMain"] > div {
+                margin-left: 0 !important;
+                padding-left: 0 !important;
+            }
+        }
+
         @media (max-width: 900px) {
             .block-container,
             [data-testid="stMainBlockContainer"] {
                 padding-top: 0.42rem !important;
-                padding-left: 0.30rem !important;
+                padding-left: 0.12rem !important;
                 padding-right: 0.30rem !important;
             }
         }
@@ -386,22 +411,22 @@ st.markdown(
         @media (max-width: 600px) {
             .block-container,
             [data-testid="stMainBlockContainer"] {
-                padding-left: 0.22rem !important;
+                padding-left: 0.10rem !important;
                 padding-right: 0.22rem !important;
             }
         }
 
         /* COMPACT CONTROL CENTER */
         [data-testid="stSidebar"] {
-            width: 272px !important;
-            min-width: 272px !important;
+            width: 244px !important;
+            min-width: 244px !important;
             border-right: 1px solid var(--scm-border);
             box-shadow: 7px 0 24px rgba(2, 6, 23, 0.035);
         }
 
         [data-testid="stSidebar"] > div:first-child {
-            width: 272px !important;
-            min-width: 272px !important;
+            width: 244px !important;
+            min-width: 244px !important;
         }
 
         [data-testid="stSidebar"] * {
