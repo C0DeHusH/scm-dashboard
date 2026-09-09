@@ -12,6 +12,27 @@ from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, datetime
 from urllib.parse import quote
 
+# Presentation export dependencies. Keep these imports isolated so the dashboard
+# can still start and display normally when the optional export packages are not
+# installed; the Export Presentation action will show the exact dependency needed.
+try:
+    from pptx import Presentation
+    from pptx.dml.color import RGBColor
+    from pptx.enum.shapes import MSO_SHAPE
+    from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
+    from pptx.util import Inches, Pt
+    PPTX_EXPORT_AVAILABLE = True
+except Exception:
+    PPTX_EXPORT_AVAILABLE = False
+
+try:
+    import plotly.io as pio
+    import importlib.util
+    KALEIDO_AVAILABLE = importlib.util.find_spec("kaleido") is not None
+except Exception:
+    pio = None
+    KALEIDO_AVAILABLE = False
+
 
 # =========================================================
 # 0. ROUNDING & CLOUD PERSISTENCE UTILITIES
@@ -578,33 +599,10 @@ st.markdown(
             background: rgba(99, 102, 241, 0.035);
         }
 
-        /* CONSISTENT OPERATIONAL DATA ALIGNMENT */
-        .pareto-html-table th,
-        .pareto-html-table td {
-            vertical-align: middle;
-        }
-
-        .pareto-html-table th.num,
-        .pareto-html-table td.num {
-            text-align: center !important;
+        .pareto-html-table .num {
+            text-align: right;
             font-variant-numeric: tabular-nums;
             white-space: nowrap;
-        }
-
-        .pareto-html-table td.status-cell,
-        .pareto-html-table th.status-head {
-            text-align: center !important;
-            vertical-align: middle !important;
-        }
-
-        .pareto-html-table td.model-cell,
-        .pareto-html-table th.model-head {
-            text-align: left !important;
-        }
-
-        .pareto-html-table td.status-cell .pareto-status {
-            margin-inline: auto;
-            justify-content: center;
         }
 
         /* WORLD-CLASS STOCK STATUS SYSTEM */
@@ -877,19 +875,6 @@ st.markdown(
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-        }
-
-        .performance-card {
-            min-height: 142px;
-        }
-
-        .performance-card .metric-value {
-            margin-top: 7px;
-            margin-bottom: 7px;
-        }
-
-        .performance-card .metric-footnote {
-            margin-top: 7px;
         }
 
         .metric-title,
@@ -2483,29 +2468,13 @@ def create_styled_line_chart(
 
 
 def performance_card(title, value, note):
-    'Performance Overview uses the same visual language as Branch-Level KPI cards.'
-    badge_map = {
-        'Class A Rate': ('HIGH PRIORITY RISK', 'red', 'A'),
-        'Class B Rate': ('MEDIUM PRIORITY RISK', 'yellow', 'B'),
-        'Class C Rate': ('LOW PRIORITY RISK', 'green', 'C'),
-        'Average Rate': ('PERFORMANCE INDEX', 'blue', 'Σ'),
-    }
-    badge_text, color_theme, icon = badge_map.get(
-        title, ('PERFORMANCE', 'blue', '•')
-    )
-
-    return (
-        f'<div class="metric-card-base performance-card">'
-        f'<div class="metric-header">'
-        f'<span>{html.escape(str(title))}</span>'
-        f'<div class="icon-box">{html.escape(str(icon))}</div>'
-        f'</div>'
-        f'<div class="metric-value">{value}%</div>'
-        f'<div><span class="badge badge-{color_theme}">'
-        f'{html.escape(str(badge_text))}</span></div>'
-        f'<div class="metric-footnote">{html.escape(str(note))}</div>'
-        f'</div>'
-    )
+    return f"""
+    <div class='metric-card'>
+        <div class='metric-title'>{title}</div>
+        <div class='metric-value-sm'>{value}%</div>
+        <div class='metric-footnote'>{note}</div>
+    </div>
+    """
 
 
 def card_html(title, value, badge_text, color_theme, icon):
@@ -2519,6 +2488,567 @@ def card_html(title, value, badge_text, color_theme, icon):
         <div><span class='badge badge-{color_theme}'>{badge_text}</span></div>
     </div>
     """
+
+# =========================================================
+# PRESENTATION EXPORT — EXECUTIVE POWERPOINT DECK
+#
+# The export intentionally uses the same Plotly figure builders used by the
+# live dashboard. This keeps the PowerPoint presentation visually aligned with
+# the on-screen YTD / Weekly charts rather than rebuilding different charts.
+# =========================================================
+PPT_W = Inches(13.333333)
+PPT_H = Inches(7.5)
+
+
+def ppt_rgb(hex_color):
+    value = hex_color.replace("#", "").strip()
+    if len(value) == 3:
+        value = "".join(ch * 2 for ch in value)
+    return RGBColor(int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16))
+
+
+def ppt_theme_colors():
+    if SCM_IS_DARK:
+        return {
+            "bg": "070B14",
+            "surface": "0F172A",
+            "surface2": "111827",
+            "text": "F8FAFC",
+            "muted": "94A3B8",
+            "border": "334155",
+            "accent": "6366F1",
+            "red": "F43F5E",
+            "amber": "F59E0B",
+            "green": "10B981",
+            "blue": "0EA5E9",
+        }
+    return {
+        "bg": "F6F8FC",
+        "surface": "FFFFFF",
+        "surface2": "F8FAFC",
+        "text": "0F172A",
+        "muted": "64748B",
+        "border": "CBD5E1",
+        "accent": "4F46E5",
+        "red": "F43F5E",
+        "amber": "F59E0B",
+        "green": "10B981",
+        "blue": "0EA5E9",
+    }
+
+
+def ppt_add_background(slide, colors):
+    fill = slide.background.fill
+    fill.solid()
+    fill.fore_color.rgb = ppt_rgb(colors["bg"])
+
+
+def ppt_add_title(slide, title, subtitle="", colors=None):
+    colors = colors or ppt_theme_colors()
+    shape = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), PPT_W, Inches(0.14)
+    )
+    shape.fill.solid()
+    shape.fill.fore_color.rgb = ppt_rgb(colors["accent"])
+    shape.line.fill.background()
+
+    tx = slide.shapes.add_textbox(Inches(0.55), Inches(0.34), Inches(12.2), Inches(0.62))
+    tf = tx.text_frame
+    tf.clear()
+    p = tf.paragraphs[0]
+    p.text = title
+    p.font.name = "Aptos Display"
+    p.font.size = Pt(24)
+    p.font.bold = True
+    p.font.color.rgb = ppt_rgb(colors["text"])
+
+    if subtitle:
+        st = slide.shapes.add_textbox(Inches(0.57), Inches(0.92), Inches(12.0), Inches(0.34))
+        sf = st.text_frame
+        sf.clear()
+        sp = sf.paragraphs[0]
+        sp.text = subtitle
+        sp.font.name = "Aptos"
+        sp.font.size = Pt(9.5)
+        sp.font.color.rgb = ppt_rgb(colors["muted"])
+
+
+def ppt_add_footer(slide, text, colors=None):
+    colors = colors or ppt_theme_colors()
+    box = slide.shapes.add_textbox(Inches(0.55), Inches(7.12), Inches(12.2), Inches(0.20))
+    tf = box.text_frame
+    tf.clear()
+    p = tf.paragraphs[0]
+    p.text = text
+    p.font.name = "Aptos"
+    p.font.size = Pt(7.5)
+    p.font.color.rgb = ppt_rgb(colors["muted"])
+    p.alignment = PP_ALIGN.RIGHT
+
+
+def ppt_add_panel(slide, x, y, w, h, title, colors=None):
+    colors = colors or ppt_theme_colors()
+    shape = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE, x, y, w, h
+    )
+    shape.fill.solid()
+    shape.fill.fore_color.rgb = ppt_rgb(colors["surface"])
+    shape.line.color.rgb = ppt_rgb(colors["border"])
+    shape.line.width = Pt(0.8)
+    title_box = slide.shapes.add_textbox(x + Inches(0.18), y + Inches(0.12), w - Inches(0.35), Inches(0.28))
+    tf = title_box.text_frame
+    tf.clear()
+    p = tf.paragraphs[0]
+    p.text = title
+    p.font.name = "Aptos"
+    p.font.size = Pt(10.5)
+    p.font.bold = True
+    p.font.color.rgb = ppt_rgb(colors["text"])
+    return shape
+
+
+def ppt_add_metric_card(slide, x, y, w, h, title, value, badge, accent, colors=None):
+    colors = colors or ppt_theme_colors()
+    card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, x, y, w, h)
+    card.fill.solid()
+    card.fill.fore_color.rgb = ppt_rgb(colors["surface"])
+    card.line.color.rgb = ppt_rgb(colors["border"])
+    card.line.width = Pt(0.8)
+
+    stripe = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, x, y, Inches(0.05), h)
+    stripe.fill.solid()
+    stripe.fill.fore_color.rgb = ppt_rgb(accent)
+    stripe.line.fill.background()
+
+    tb = slide.shapes.add_textbox(x + Inches(0.16), y + Inches(0.12), w - Inches(0.28), Inches(0.27))
+    tf = tb.text_frame
+    tf.clear()
+    p = tf.paragraphs[0]
+    p.text = title.upper()
+    p.font.name = "Aptos"
+    p.font.size = Pt(8.5)
+    p.font.bold = True
+    p.font.color.rgb = ppt_rgb(colors["muted"])
+
+    vb = slide.shapes.add_textbox(x + Inches(0.16), y + Inches(0.43), w - Inches(0.28), Inches(0.52))
+    vf = vb.text_frame
+    vf.clear()
+    vp = vf.paragraphs[0]
+    vp.text = str(value)
+    vp.font.name = "Aptos Display"
+    vp.font.size = Pt(24)
+    vp.font.bold = True
+    vp.font.color.rgb = ppt_rgb(colors["text"])
+
+    bb = slide.shapes.add_textbox(x + Inches(0.16), y + h - Inches(0.33), w - Inches(0.28), Inches(0.20))
+    bf = bb.text_frame
+    bf.clear()
+    bp = bf.paragraphs[0]
+    bp.text = badge.upper()
+    bp.font.name = "Aptos"
+    bp.font.size = Pt(7.5)
+    bp.font.bold = True
+    bp.font.color.rgb = ppt_rgb(accent)
+
+
+def ppt_add_image(slide, image_bytes, x, y, w, h):
+    slide.shapes.add_picture(io.BytesIO(image_bytes), x, y, width=w, height=h)
+
+
+def ppt_figure_png(fig, width=1500, height=820):
+    if not PPTX_EXPORT_AVAILABLE or not KALEIDO_AVAILABLE or pio is None:
+        raise RuntimeError(
+            "PowerPoint export requires the packages 'python-pptx' and 'kaleido'. "
+            "Add both to requirements.txt and redeploy."
+        )
+    return pio.to_image(fig, format="png", width=width, height=height, scale=1)
+
+
+def ppt_add_table(slide, df, x, y, w, h, title, colors=None, font_size=7.4):
+    colors = colors or ppt_theme_colors()
+    if df is None or df.empty:
+        empty = slide.shapes.add_textbox(x, y + Inches(0.45), w, Inches(0.35))
+        tf = empty.text_frame
+        tf.clear()
+        p = tf.paragraphs[0]
+        p.text = "No model records available."
+        p.font.size = Pt(9)
+        p.font.color.rgb = ppt_rgb(colors["muted"])
+        return
+
+    title_box = slide.shapes.add_textbox(x, y, w, Inches(0.28))
+    tf = title_box.text_frame
+    tf.clear()
+    p = tf.paragraphs[0]
+    p.text = title
+    p.font.name = "Aptos"
+    p.font.bold = True
+    p.font.size = Pt(10)
+    p.font.color.rgb = ppt_rgb(colors["text"])
+
+    rows = len(df) + 1
+    cols = len(df.columns)
+    table_shape = slide.shapes.add_table(rows, cols, x, y + Inches(0.32), w, h - Inches(0.32))
+    table = table_shape.table
+
+    # Balanced widths for Rank / Class / Model / Status / Inventory / Transfer / DOI.
+    widths = [0.52, 0.55, 3.45, 1.55, 1.05, 1.05, 0.82]
+    if cols == 7:
+        total = sum(widths)
+        for i, frac in enumerate(widths):
+            table.columns[i].width = int(w * (frac / total))
+    else:
+        each = int(w / cols)
+        for i in range(cols):
+            table.columns[i].width = each
+
+    headers = list(df.columns)
+    for c, header in enumerate(headers):
+        cell = table.cell(0, c)
+        cell.text = str(header)
+        cell.fill.solid()
+        cell.fill.fore_color.rgb = ppt_rgb(colors["surface2"])
+        cell.text_frame.paragraphs[0].font.bold = True
+        cell.text_frame.paragraphs[0].font.size = Pt(font_size)
+        cell.text_frame.paragraphs[0].font.color.rgb = ppt_rgb(colors["muted"])
+        cell.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+        cell.text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER if header != "Model" and header != "Status" else PP_ALIGN.LEFT
+
+    for r, (_, row) in enumerate(df.iterrows(), start=1):
+        for c, header in enumerate(headers):
+            cell = table.cell(r, c)
+            value = row[header]
+            cell.text = str(value)
+            cell.fill.solid()
+            cell.fill.fore_color.rgb = ppt_rgb(colors["surface"])
+            cell.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+            p = cell.text_frame.paragraphs[0]
+            p.font.name = "Aptos"
+            p.font.size = Pt(font_size)
+            p.font.color.rgb = ppt_rgb(colors["text"])
+            p.alignment = PP_ALIGN.CENTER if header not in {"Model", "Status"} else PP_ALIGN.LEFT
+
+            if header == "Status":
+                status_class = stock_status_style_class(str(value))
+                status_color = {
+                    "stockout": colors["red"],
+                    "critical": "F97316",
+                    "low": colors["amber"],
+                    "ok": colors["green"],
+                    "overstock": colors["blue"],
+                }.get(status_class, colors["muted"])
+                p.font.color.rgb = ppt_rgb(status_color)
+                p.font.bold = True
+
+
+def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
+    """
+    Create an executive PowerPoint deck from the exact live dashboard datasets.
+
+    Included in the deck:
+      • Executive cover and scope summary
+      • YTD and Weekly KPI trend charts using the same Plotly builders
+      • Per-area Average and Class A stockout charts
+      • Performance Overview
+      • Class A branch risk / zero-OOS ranking
+      • One or more detailed slides for EVERY active branch in the selected scope,
+        including A/B/C rates, average rate, and model-level stock status/inventory/
+        transfer/DOI.
+    """
+    colors = ppt_theme_colors()
+    prs = Presentation()
+    prs.slide_width = PPT_W
+    prs.slide_height = PPT_H
+    blank = prs.slide_layouts[6]
+
+    selected_area_data = raw_data.copy()
+    if selected_area != "All Areas":
+        selected_area_data = selected_area_data[selected_area_data["area"] == selected_area].copy()
+
+    branch_count = selected_area_data["branch"].replace("", np.nan).dropna().nunique()
+    model_count = selected_area_data["model"].replace("", np.nan).dropna().nunique()
+    record_count = len(selected_area_data)
+
+    # ----- Cover -----
+    slide = prs.slides.add_slide(blank)
+    ppt_add_background(slide, colors)
+    cover = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.60), Inches(0.75), Inches(12.1), Inches(5.65))
+    cover.fill.solid()
+    cover.fill.fore_color.rgb = ppt_rgb(colors["surface"])
+    cover.line.color.rgb = ppt_rgb(colors["border"])
+    cover.line.width = Pt(1)
+
+    accent = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.60), Inches(0.75), Inches(0.12), Inches(5.65))
+    accent.fill.solid(); accent.fill.fore_color.rgb = ppt_rgb(colors["accent"]); accent.line.fill.background()
+
+    tb = slide.shapes.add_textbox(Inches(1.05), Inches(1.30), Inches(10.7), Inches(0.65))
+    tf = tb.text_frame; tf.clear(); p = tf.paragraphs[0]
+    p.text = "MUTI MC SCM EXECUTIVE CONTROL TOWER"
+    p.font.name = "Aptos Display"; p.font.size = Pt(28); p.font.bold = True; p.font.color.rgb = ppt_rgb(colors["text"])
+
+    sb = slide.shapes.add_textbox(Inches(1.08), Inches(2.02), Inches(10.5), Inches(0.65))
+    sf = sb.text_frame; sf.clear(); sp = sf.paragraphs[0]
+    sp.text = "Inventory visibility • stockout risk • branch action intelligence"
+    sp.font.name = "Aptos"; sp.font.size = Pt(15); sp.font.color.rgb = ppt_rgb(colors["muted"])
+
+    scope_box = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(1.08), Inches(3.04), Inches(4.20), Inches(1.45))
+    scope_box.fill.solid(); scope_box.fill.fore_color.rgb = ppt_rgb(colors["surface2"]); scope_box.line.color.rgb = ppt_rgb(colors["border"])
+    st = slide.shapes.add_textbox(Inches(1.33), Inches(3.27), Inches(3.7), Inches(0.9))
+    stf = st.text_frame; stf.clear()
+    sp = stf.paragraphs[0]; sp.text = f"NETWORK SCOPE\n{selected_area}"; sp.font.name = "Aptos"; sp.font.size = Pt(13); sp.font.bold = True; sp.font.color.rgb = ppt_rgb(colors["text"])
+
+    stats = slide.shapes.add_textbox(Inches(5.75), Inches(3.08), Inches(6.0), Inches(1.45))
+    tf = stats.text_frame; tf.clear()
+    for idx, (label, val) in enumerate([
+        ("Branches", branch_count), ("Models", model_count), ("Stock records", f"{record_count:,}"),
+    ]):
+        p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
+        p.text = f"{label}: {val}"; p.font.name = "Aptos"; p.font.size = Pt(12); p.font.color.rgb = ppt_rgb(colors["text"])
+        p.space_after = Pt(6)
+
+    latest_dates = pd.concat([
+        pd.to_datetime(kpi_ytd.get("period", pd.Series(dtype="datetime64[ns]")), errors="coerce"),
+        pd.to_datetime(kpi_weekly.get("period", pd.Series(dtype="datetime64[ns]")), errors="coerce"),
+    ], ignore_index=True).dropna()
+    latest_label = latest_dates.max().strftime("%d %b %Y") if not latest_dates.empty else "No KPI date"
+    fb = slide.shapes.add_textbox(Inches(1.08), Inches(5.55), Inches(10.9), Inches(0.45))
+    ftf = fb.text_frame; ftf.clear(); fp = ftf.paragraphs[0]
+    fp.text = f"Presentation date: {date.today().strftime('%d %b %Y')}  •  Latest KPI observation: {latest_label}"
+    fp.font.name = "Aptos"; fp.font.size = Pt(9); fp.font.color.rgb = ppt_rgb(colors["muted"])
+    ppt_add_footer(slide, "SCM Executive Control Tower • Generated from dashboard source data", colors)
+
+    # ----- Trend slides: YTD and Weekly -----
+    trend_specs = [
+        ("class_a_doi", "MC Class A DoI", "CLASS A DAYS OF INVENTORY", "#7c3aed", False, True),
+        ("overall_doi", "Days of Inventory", "OVERALL INVENTORY COVERAGE", "#2563eb", False, True),
+        ("per_branch", "Per Branch OOS", "STOCKOUT RATE", "#0ea5e9", True, False),
+        ("class_a_out", "Overall Class A Rate", "CLASS A STOCKOUT RATE", "#f43f5e", True, False),
+        ("before_po", "Overall Before PO Balance", "STOCKOUT RATE BEFORE PO BALANCE", "#f59e0b", True, False),
+        ("after_po", "Overall After PO Balance", "STOCKOUT RATE AFTER PO BALANCE", "#10b981", True, True),
+    ]
+    for label, source in [("YTD", kpi_ytd), ("Weekly", kpi_weekly)]:
+        figs = []
+        for key, title, subtitle, color, pct, fill in trend_specs:
+            figs.append(
+                create_styled_line_chart(
+                    source, key, title, subtitle, color,
+                    is_weekly=(label == "Weekly"),
+                    is_percentage=pct,
+                    fill=fill,
+                )
+            )
+        for start in range(0, len(figs), 2):
+            slide = prs.slides.add_slide(blank)
+            ppt_add_background(slide, colors)
+            ppt_add_title(
+                slide,
+                f"MUTI MC Trends — {label}",
+                f"Same KPI presentation as dashboard • {selected_area} • Source dates only",
+                colors,
+            )
+            for pos, fig in enumerate(figs[start:start+2]):
+                img = ppt_figure_png(fig)
+                x = Inches(0.55 + (pos * 6.15))
+                ppt_add_panel(slide, x, Inches(1.38), Inches(5.95), Inches(5.35), "", colors)
+                ppt_add_image(slide, img, x + Inches(0.12), Inches(1.56), Inches(5.70), Inches(4.95))
+            ppt_add_footer(slide, f"{label} trends • {selected_area}", colors)
+
+    # ----- Area rates -----
+    area_rates = []
+    for area, a_df in raw_data.groupby("area", sort=True, dropna=True):
+        if not str(area).strip():
+            continue
+        avg_area_rate = round_half_up((
+            calculate_stockout_rate(a_df, "Class A") +
+            calculate_stockout_rate(a_df, "Class B") +
+            calculate_stockout_rate(a_df, "Class C")
+        ) / 3)
+        normalized_class = a_df["pareto_class"].fillna("").astype(str).str.strip().str.casefold()
+        class_a_df = a_df[normalized_class.eq("class a")]
+        status = class_a_df["stock_status"].fillna("").astype(str).str.strip().str.casefold()
+        stockout_count = int(status.eq("stockout").sum())
+        total_count = int(len(class_a_df))
+        class_a_rate = round_half_up((stockout_count / total_count) * 100) if total_count else 0
+        area_rates.append({
+            "Area": area,
+            "Average Stock Out Rate": avg_area_rate,
+            "Class A Stock Out Rate": class_a_rate,
+            "Class A Stock Out Count": stockout_count,
+            "Class A Total Stock Status Count": total_count,
+        })
+    area_df = pd.DataFrame(area_rates).sort_values("Average Stock Out Rate", ascending=False).reset_index(drop=True) if area_rates else pd.DataFrame()
+
+    if not area_df.empty:
+        area_order = area_df["Area"].tolist()
+        fig_avg = px.bar(area_df, x="Area", y="Average Stock Out Rate", text="Average Stock Out Rate", template=PLOTLY_TEMPLATE, title="Average Stock Out Rate per Area")
+        fig_avg.update_traces(texttemplate="<b>%{text:.0f}%</b>", textposition="outside", hovertemplate="<b>%{x}</b><br>Average Stock Out Rate: <b>%{y:.0f}%</b><extra></extra>")
+        apply_executive_bar_style(fig_avg, accent_color="#6366f1", value_axis_title="Stockout rate", value_max=max(10, float(area_df["Average Stock Out Rate"].max()) * 1.24), category_order=area_order, orientation="v", percent=True, height=425)
+        fig_avg.update_layout(title_text="Average Stock Out Rate per Area<br><span style='font-size:10px;color:#94a3b8'>NETWORK RISK COMPARISON</span>")
+
+        fig_a = px.bar(area_df, x="Area", y="Class A Stock Out Rate", text="Class A Stock Out Rate", template=PLOTLY_TEMPLATE, title="Class A Stock Out Rate per Area", custom_data=["Class A Stock Out Count", "Class A Total Stock Status Count"])
+        fig_a.update_traces(texttemplate="<b>%{text:.0f}%</b>", textposition="outside", hovertemplate="<b>%{x}</b><br>Class A Stock Out Rate: <b>%{y:.0f}%</b><br>Class A Stock Out Count: <b>%{customdata[0]}</b><br>Class A Total Stock Status Count: <b>%{customdata[1]}</b><extra></extra>")
+        apply_executive_bar_style(fig_a, accent_color="#f43f5e", value_axis_title="Class A stockout rate", value_max=max(10, float(area_df["Class A Stock Out Rate"].max()) * 1.24), category_order=area_order, orientation="v", percent=True, height=425)
+        fig_a.update_layout(title_text="Class A Stock Out Rate per Area<br><span style='font-size:10px;color:#94a3b8'>HIGHEST-PRIORITY PARETO RISK</span>")
+
+        slide = prs.slides.add_slide(blank)
+        ppt_add_background(slide, colors)
+        ppt_add_title(slide, "Stock Out Rate per Area", f"Average + Class A comparison • {selected_area}", colors)
+        for pos, fig in enumerate([fig_avg, fig_a]):
+            x = Inches(0.55 + pos * 6.15)
+            ppt_add_panel(slide, x, Inches(1.38), Inches(5.95), Inches(5.35), "", colors)
+            ppt_add_image(slide, ppt_figure_png(fig), x + Inches(0.12), Inches(1.56), Inches(5.70), Inches(4.95))
+        ppt_add_footer(slide, f"Area comparison • {selected_area}", colors)
+
+    # ----- Performance Overview -----
+    rate_a = calculate_stockout_rate(selected_area_data, "Class A")
+    rate_b = calculate_stockout_rate(selected_area_data, "Class B")
+    rate_c = calculate_stockout_rate(selected_area_data, "Class C")
+    avg_rate = round_half_up((rate_a + rate_b + rate_c) / 3)
+    slide = prs.slides.add_slide(blank)
+    ppt_add_background(slide, colors)
+    ppt_add_title(slide, "Performance Overview", f"Current raw-data stockout profile • {selected_area}", colors)
+    cards = [
+        ("Class A Rate", f"{rate_a}%", "HIGH PRIORITY RISK", colors["red"]),
+        ("Class B Rate", f"{rate_b}%", "MEDIUM PRIORITY RISK", colors["amber"]),
+        ("Class C Rate", f"{rate_c}%", "LOW PRIORITY RISK", colors["green"]),
+        ("Average Rate", f"{avg_rate}%", "PERFORMANCE INDEX", colors["blue"]),
+    ]
+    for i, (title, value, badge, accent) in enumerate(cards):
+        ppt_add_metric_card(slide, Inches(0.55 + i * 3.08), Inches(1.65), Inches(2.82), Inches(1.65), title, value, badge, accent, colors)
+
+    detail_box = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.55), Inches(3.65), Inches(12.2), Inches(2.35))
+    detail_box.fill.solid(); detail_box.fill.fore_color.rgb = ppt_rgb(colors["surface"]); detail_box.line.color.rgb = ppt_rgb(colors["border"])
+    detail = slide.shapes.add_textbox(Inches(0.82), Inches(3.95), Inches(11.6), Inches(1.8))
+    tf = detail.text_frame; tf.clear()
+    bullets = [
+        f"Network scope: {selected_area}",
+        f"Active branches: {branch_count:,}",
+        f"Active models: {model_count:,}",
+        f"Stock status records: {record_count:,}",
+        "Rates are derived from the active Raw_Data records using the dashboard's existing Class A/B/C rate logic.",
+    ]
+    for idx, text_value in enumerate(bullets):
+        p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
+        p.text = "• " + text_value; p.font.name = "Aptos"; p.font.size = Pt(11); p.font.color.rgb = ppt_rgb(colors["text"]); p.space_after = Pt(6)
+    ppt_add_footer(slide, f"Performance overview • {selected_area}", colors)
+
+    # ----- Class A branch ranking -----
+    branch_source = selected_area_data.copy()
+    branch_source["_class"] = branch_source["pareto_class"].fillna("").astype(str).str.strip().str.casefold()
+    branch_source["_status"] = branch_source["stock_status"].fillna("").astype(str).str.strip().str.casefold()
+    branch_source["branch"] = branch_source["branch"].fillna("").astype(str).str.strip()
+    branch_source["area"] = branch_source["area"].fillna("").astype(str).str.strip()
+    ca = branch_source[branch_source["_class"].eq("class a") & branch_source["branch"].ne("")].copy()
+    branch_rank_summary = pd.DataFrame()
+    if not ca.empty:
+        ca["_is_stockout"] = ca["_status"].eq("stockout").astype(int)
+        branch_rank_summary = ca.groupby(["area", "branch"], as_index=False).agg(
+            stockout=("_is_stockout", "sum"),
+            total=("_is_stockout", "size"),
+        )
+        branch_rank_summary["rate"] = branch_rank_summary.apply(lambda r: round_half_up(r["stockout"] / r["total"] * 100) if r["total"] else 0, axis=1)
+        branch_rank_summary["display"] = branch_rank_summary["branch"] + branch_rank_summary["area"].map(lambda x: f" • {x}" if selected_area == "All Areas" else "")
+
+    if not branch_rank_summary.empty:
+        high = branch_rank_summary[branch_rank_summary["rate"] > 0].sort_values(["rate", "stockout", "total", "branch"], ascending=[False, False, False, True]).head(10).reset_index(drop=True)
+        zero = branch_rank_summary[branch_rank_summary["rate"] == 0].sort_values(["total", "branch"], ascending=[False, True]).head(10).reset_index(drop=True)
+        slide = prs.slides.add_slide(blank)
+        ppt_add_background(slide, colors)
+        ppt_add_title(slide, "Class A Branch Stockout Ranking", f"Top branch risks and zero-stockout leaders • {selected_area}", colors)
+
+        if not high.empty:
+            high_order = high["display"].tolist()
+            fig_high = px.bar(high, x="rate", y="display", orientation="h", text="rate", template=PLOTLY_TEMPLATE, title=f"Top {len(high)} Highest Class A Stock Out Rate")
+            fig_high.update_traces(texttemplate="<b>%{text:.0f}%</b>", textposition="outside")
+            apply_executive_bar_style(fig_high, accent_color="#f43f5e", value_axis_title="Class A stockout rate", value_max=min(105, max(10, float(high["rate"].max()) * 1.18)), category_order=high_order, orientation="h", percent=True, height=410, right_margin=54)
+            fig_high.update_layout(title_text=f"Top {len(high)} Highest Class A Stock Out Rate<br><span style='font-size:10px;color:#94a3b8'>PRIORITY BRANCH RISK RANKING</span>")
+        else:
+            fig_high = None
+
+        if not zero.empty:
+            zero = zero.copy(); zero["zero_label"] = "0% OOS"
+            zero_order = zero["display"].tolist()
+            fig_zero = px.bar(zero, x="total", y="display", orientation="h", text="zero_label", template=PLOTLY_TEMPLATE, title=f"Top {len(zero)} Branches with 0% Class A Stock Out Rate")
+            fig_zero.update_traces(texttemplate="<b>%{text}</b>", textposition="outside")
+            apply_executive_bar_style(fig_zero, accent_color="#10b981", value_axis_title="Class A stock-status coverage count", value_max=max(1, float(zero["total"].max()) * 1.22), category_order=zero_order, orientation="h", percent=False, height=410, right_margin=66)
+            fig_zero.update_layout(title_text=f"Top {len(zero)} Branches with 0% Class A Stock Out Rate<br><span style='font-size:10px;color:#94a3b8'>ZERO-OOS LEADERS BY CLASS A COVERAGE</span>")
+        else:
+            fig_zero = None
+
+        if fig_high is not None:
+            ppt_add_panel(slide, Inches(0.55), Inches(1.38), Inches(5.95), Inches(5.35), "", colors)
+            ppt_add_image(slide, ppt_figure_png(fig_high), Inches(0.67), Inches(1.56), Inches(5.70), Inches(4.95))
+        if fig_zero is not None:
+            ppt_add_panel(slide, Inches(6.75), Inches(1.38), Inches(5.95), Inches(5.35), "", colors)
+            ppt_add_image(slide, ppt_figure_png(fig_zero), Inches(6.87), Inches(1.56), Inches(5.70), Inches(4.95))
+        ppt_add_footer(slide, f"Class A branch ranking • {selected_area}", colors)
+
+    # ----- Every branch: rates + model stock status -----
+    branches = sorted([b for b in selected_area_data["branch"].dropna().astype(str).str.strip().unique() if b])
+    for branch in branches:
+        bdf = selected_area_data[selected_area_data["branch"].astype(str).str.strip() == branch].copy()
+        a = calculate_stockout_rate(bdf, "Class A")
+        b = calculate_stockout_rate(bdf, "Class B")
+        c = calculate_stockout_rate(bdf, "Class C")
+        avg = round_half_up((a + b + c) / 3)
+
+        # Normalize and sort exactly as the dashboard action model tables do.
+        model_df = bdf.copy()
+        model_df["remaining_inventory"] = round_series_half_up(model_df["remaining_inventory"]).fillna(0).astype(int)
+        model_df["suggested_transfer"] = round_series_half_up(model_df["suggested_transfer"]).fillna(0).astype(int)
+        model_df["doi"] = round_series_half_up(model_df["doi"]).fillna(0).astype(int)
+        model_df["pareto_class"] = model_df["pareto_class"].fillna("").astype(str).str.strip()
+        model_df["stock_status"] = model_df["stock_status"].fillna("").astype(str).str.strip()
+        model_df["model"] = model_df["model"].fillna("").astype(str).str.strip()
+        model_df = model_df.sort_values(["suggested_transfer", "doi"], ascending=[False, True]).reset_index(drop=True)
+        model_df.insert(0, "Rank", range(1, len(model_df) + 1))
+        model_df = model_df[["Rank", "pareto_class", "model", "stock_status", "remaining_inventory", "suggested_transfer", "doi"]]
+        model_df.columns = ["Rank", "Class", "Model", "Status", "Inventory", "Transfer", "DOI"]
+
+        # Build one summary slide per branch, followed by paginated model slides if needed.
+        slide = prs.slides.add_slide(blank)
+        ppt_add_background(slide, colors)
+        ppt_add_title(slide, f"Branch Performance — {branch}", f"{selected_area} • Stockout rate, average performance, and model action status", colors)
+        branch_cards = [
+            ("Branch Class A Rate", f"{a}%", "HIGH PRIORITY RISK", colors["red"]),
+            ("Branch Class B Rate", f"{b}%", "MEDIUM PRIORITY RISK", colors["amber"]),
+            ("Branch Class C Rate", f"{c}%", "LOW PRIORITY RISK", colors["green"]),
+            ("Branch Average", f"{avg}%", "PERFORMANCE INDEX", colors["blue"]),
+        ]
+        for i, (title, value, badge, accent_color) in enumerate(branch_cards):
+            ppt_add_metric_card(slide, Inches(0.55 + i * 3.08), Inches(1.47), Inches(2.82), Inches(1.52), title, value, badge, accent_color, colors)
+
+        counts = model_df["Class"].value_counts().to_dict() if not model_df.empty else {}
+        info = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.55), Inches(3.33), Inches(12.2), Inches(2.75))
+        info.fill.solid(); info.fill.fore_color.rgb = ppt_rgb(colors["surface"]); info.line.color.rgb = ppt_rgb(colors["border"])
+        box = slide.shapes.add_textbox(Inches(0.83), Inches(3.65), Inches(11.5), Inches(2.15))
+        tf = box.text_frame; tf.clear()
+        lines = [
+            f"Branch: {branch}",
+            f"Area: {selected_area if selected_area != 'All Areas' else (bdf['area'].iloc[0] if not bdf.empty else '—')}",
+            f"Models / stock-status records: {len(model_df):,}",
+            f"Class A: {counts.get('Class A', 0):,} • Class B: {counts.get('Class B', 0):,} • Class C: {counts.get('Class C', 0):,}",
+            "The detailed model slides that follow preserve the dashboard's stock status, inventory, suggested transfer, and DOI fields.",
+        ]
+        for idx, line in enumerate(lines):
+            p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
+            p.text = "• " + line; p.font.name = "Aptos"; p.font.size = Pt(10.5); p.font.color.rgb = ppt_rgb(colors["text"]); p.space_after = Pt(5)
+        ppt_add_footer(slide, f"Branch performance • {branch} • {selected_area}", colors)
+
+        page_size = 16
+        for start in range(0, len(model_df), page_size):
+            page_df = model_df.iloc[start:start + page_size].copy()
+            model_slide = prs.slides.add_slide(blank)
+            ppt_add_background(model_slide, colors)
+            end_num = start + len(page_df)
+            ppt_add_title(model_slide, f"Model Stock Status — {branch}", f"Rows {start+1:,}–{end_num:,} of {len(model_df):,} • {selected_area}", colors)
+            ppt_add_table(model_slide, page_df, Inches(0.55), Inches(1.42), Inches(12.2), Inches(5.45), "Operational model action list", colors, font_size=7.5)
+            ppt_add_footer(model_slide, f"Model stock status • {branch} • Inventory / Transfer / DOI", colors)
+
+    output = io.BytesIO()
+    prs.save(output)
+    return output.getvalue()
+
 
 # =========================================================
 # INITIALIZE PRIMARY TABS
@@ -2797,6 +3327,76 @@ with tab_inventory:
             """,
             unsafe_allow_html=True,
         )
+
+
+    # =========================================================
+    # PRESENTATION EXPORT ACTION
+    # =========================================================
+    export_col1, export_col2 = st.columns([5.1, 0.9], gap="small", vertical_alignment="center")
+    with export_col1:
+        st.markdown(
+            """
+            <div style='padding:12px 0 4px 0;'>
+                <div style='font-size:0.86rem;font-weight:900;letter-spacing:0.04em;'>
+                    PRESENTATION EXPORT
+                </div>
+                <div style='font-size:0.72rem;color:#94a3b8;line-height:1.45;'>
+                    Builds a PowerPoint deck containing YTD + Weekly trends, per-area risk,
+                    performance overview, Class A branch ranking, and every branch's rates
+                    plus model-level stock status, inventory, transfer and DOI.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with export_col2:
+        export_clicked = st.button(
+            "📊 Export Presentation",
+            type="primary",
+            width="stretch",
+            key="export_scm_presentation",
+            help="Generate an executive PowerPoint presentation from the active dashboard data.",
+        )
+
+    if export_clicked:
+        if not PPTX_EXPORT_AVAILABLE or not KALEIDO_AVAILABLE:
+            st.error(
+                "Presentation export requires `python-pptx` and `kaleido`. "
+                "Add both packages to requirements.txt, then redeploy the Streamlit app."
+            )
+        else:
+            try:
+                with st.spinner("Building executive PowerPoint presentation…"):
+                    presentation_bytes = build_scm_presentation(
+                        raw_data,
+                        kpi_ytd,
+                        kpi_weekly,
+                        selected_area,
+                    )
+                st.session_state["scm_presentation_bytes"] = presentation_bytes
+                st.session_state["scm_presentation_name"] = (
+                    f"SCM_Control_Tower_{str(selected_area).replace(' ', '_').replace('/', '-')}.pptx"
+                )
+                st.success(
+                    "Presentation created. It includes both YTD and Weekly charts, area analysis, "
+                    "branch performance, and detailed model stock-status slides."
+                )
+            except Exception as exc:
+                st.error(f"Presentation export failed: {exc}")
+
+    if st.session_state.get("scm_presentation_bytes"):
+        st.download_button(
+            "⬇️ Download PowerPoint Presentation",
+            data=st.session_state["scm_presentation_bytes"],
+            file_name=st.session_state.get(
+                "scm_presentation_name", "SCM_Control_Tower_Presentation.pptx"
+            ),
+            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            width="content",
+            key="download_scm_presentation",
+        )
+
 
 
     # =========================================================
@@ -3391,12 +3991,12 @@ with tab_inventory:
             status_class = stock_status_style_class(status_text)
             rows_html.append(
                 "<tr>"
-                f"<td class='num rank-cell'>{int(row['Rank'])}</td>"
-                f"<td class='model-cell'>{html.escape(str(row['Model']))}</td>"
-                f"<td class='status-cell'><span class='pareto-status {status_class}'>{html.escape(status_text)}</span></td>"
-                f"<td class='num inventory-cell'>{int(row['Inventory']):,}</td>"
-                f"<td class='num transfer-cell'>{int(row['Transfer']):,}</td>"
-                f"<td class='num doi-cell'>{int(row['DOI']):,}</td>"
+                f"<td class='num'>{int(row['Rank'])}</td>"
+                f"<td>{html.escape(str(row['Model']))}</td>"
+                f"<td><span class='pareto-status {status_class}'>{html.escape(status_text)}</span></td>"
+                f"<td class='num'>{int(row['Inventory']):,}</td>"
+                f"<td class='num'>{int(row['Transfer']):,}</td>"
+                f"<td class='num'>{int(row['DOI']):,}</td>"
                 "</tr>"
             )
 
@@ -3404,16 +4004,16 @@ with tab_inventory:
             "<div class='pareto-html-shell'>"
             "<table class='pareto-html-table'>"
             "<colgroup>"
-            "<col style='width:8%'>"
-            "<col style='width:31%'>"
-            "<col style='width:18%'>"
+            "<col style='width:7%'>"
+            "<col style='width:35%'>"
+            "<col style='width:16%'>"
             "<col style='width:14%'>"
             "<col style='width:14%'>"
-            "<col style='width:15%'>"
+            "<col style='width:14%'>"
             "</colgroup>"
             "<thead><tr>"
-            "<th class='num rank-head'>Rank</th><th class='model-head'>Model</th><th class='status-head'>Status</th>"
-            "<th class='num inventory-head'>Inventory</th><th class='num transfer-head'>Transfer</th><th class='num doi-head'>DOI</th>"
+            "<th class='num'>Rank</th><th>Model</th><th>Status</th>"
+            "<th class='num'>Inventory</th><th class='num'>Transfer</th><th class='num'>DOI</th>"
             "</tr></thead>"
             "<tbody>" + "".join(rows_html) + "</tbody>"
             "</table></div>"
