@@ -1121,6 +1121,8 @@ st.markdown(
             border-radius: 11px !important;
             font-weight: 850 !important;
             box-shadow: 0 8px 18px rgba(79,70,229,0.18) !important;
+            white-space: nowrap !important;
+            font-size: 0.72rem !important;
         }
 
         [data-testid="stFileUploader"] section {
@@ -1918,18 +1920,32 @@ def data_sync_dialog():
     file_size_mb = len(file_bytes) / (1024 * 1024)
     st.caption(f"Selected: {dialog_file.name} • {file_size_mb:.2f} MB")
 
-    action_col, info_col = st.columns([1.25, 2.75], gap="small")
-    with action_col:
+    action_col1, action_col2, info_col = st.columns([1.1, 1.45, 1.65], gap="small")
+    with action_col1:
         do_import = st.button(
             "Validate & Sync",
             type="primary",
             width="stretch",
             key="scm_data_sync_confirm_button",
         )
+    with action_col2:
+        do_sync_export = st.button(
+            "Sync + Export PPT",
+            type="primary",
+            width="stretch",
+            key="scm_data_sync_export_button",
+            help="Validate the workbook, synchronize it, then generate the presentation using the synced data.",
+        )
     with info_col:
         st.caption(
-            "The previous persisted workbook is retained if validation or cloud upload fails."
+            "Sync only keeps the dashboard live. Sync + Export also creates the PowerPoint with YTD/Weekly trends, Class A models only, and Greatwall excluded from the presentation."
         )
+
+    if do_sync_export:
+        do_import = True
+        sync_and_export = True
+    else:
+        sync_and_export = False
 
     if do_import:
         upload_hash = hashlib.sha256(file_bytes).hexdigest()
@@ -1947,6 +1963,25 @@ def data_sync_dialog():
         st.session_state["scm_last_successful_upload_hash"] = upload_hash
         st.session_state["scm_import_success"] = success_message
         st.cache_data.clear()
+
+        if sync_and_export:
+            try:
+                with st.spinner("Building PowerPoint from the synchronized workbook…"):
+                    synced_raw, synced_ytd, synced_weekly = process_excel_file(io.BytesIO(file_bytes))
+                    presentation_bytes = build_scm_presentation(
+                        synced_raw,
+                        synced_ytd,
+                        synced_weekly,
+                        st.session_state.get("selected_scm_area_for_export", "All Areas"),
+                    )
+                st.session_state["scm_presentation_bytes"] = presentation_bytes
+                st.session_state["scm_presentation_name"] = (
+                    f"SCM_Control_Tower_{str(st.session_state.get('selected_scm_area_for_export', 'All Areas')).replace(' ', '_').replace('/', '-')}.pptx"
+                )
+                st.session_state["scm_import_success"] = success_message + " Presentation also generated."
+            except Exception as exc:
+                st.session_state["scm_import_success"] = success_message
+                st.session_state["scm_presentation_error"] = str(exc)
         st.rerun()
 
 # =========================================================
@@ -3021,6 +3056,30 @@ def ppt_add_table(slide, df, x, y, w, h, title, colors=None, font_size=7.4):
                 p.font.bold = True
 
 
+def exclude_greatwall_for_presentation(raw_data):
+    """
+    Presentation-only exclusion: remove Greatwall model records.
+    The live dashboard data is never modified by this helper.
+    """
+    if raw_data is None or raw_data.empty:
+        return raw_data.copy() if hasattr(raw_data, "copy") else raw_data
+
+    filtered = raw_data.copy()
+    if "model" not in filtered.columns:
+        return filtered
+
+    model_text = (
+        filtered["model"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .str.casefold()
+        .str.replace(r"[^a-z0-9]+", "", regex=True)
+    )
+    greatwall_mask = model_text.eq("greatwall") | model_text.str.contains("greatwall", na=False)
+    return filtered.loc[~greatwall_mask].copy()
+
+
 def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
     """
     Create an executive PowerPoint deck from the exact live dashboard datasets.
@@ -3032,8 +3091,9 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
       • Performance Overview
       • Class A branch risk / zero-OOS ranking
       • One or more detailed slides for EVERY active branch in the selected scope,
-        including A/B/C rates, average rate, and model-level stock status/inventory/
-        transfer/DOI.
+        including A/B/C rates and average rate, with detailed model slides limited to
+        Class A models and their stock status/inventory/transfer/DOI.
+      • Greatwall model records are excluded from the presentation only.
     """
     colors = ppt_theme_colors()
     prs = Presentation()
@@ -3041,7 +3101,11 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
     prs.slide_height = PPT_H
     blank = prs.slide_layouts[6]
 
-    selected_area_data = raw_data.copy()
+    # Presentation-only source: Greatwall records are excluded here.
+    # The live dashboard continues to use the complete raw_data unchanged.
+    presentation_raw_data = exclude_greatwall_for_presentation(raw_data)
+
+    selected_area_data = presentation_raw_data.copy()
     if selected_area != "All Areas":
         selected_area_data = selected_area_data[selected_area_data["area"] == selected_area].copy()
 
@@ -3135,7 +3199,7 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
 
     # ----- Area rates -----
     area_rates = []
-    for area, a_df in raw_data.groupby("area", sort=True, dropna=True):
+    for area, a_df in selected_area_data.groupby("area", sort=True, dropna=True):
         if not str(area).strip():
             continue
         avg_area_rate = round_half_up((
@@ -3272,12 +3336,13 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
         c = calculate_stockout_rate(bdf, "Class C")
         avg = round_half_up((a + b + c) / 3)
 
-        # Normalize and sort exactly as the dashboard action model tables do.
+        # Presentation requirement: detailed model slides show CLASS A ONLY.
         model_df = bdf.copy()
+        model_df["pareto_class"] = model_df["pareto_class"].fillna("").astype(str).str.strip()
+        model_df = model_df[model_df["pareto_class"].str.casefold().eq("class a")].copy()
         model_df["remaining_inventory"] = round_series_half_up(model_df["remaining_inventory"]).fillna(0).astype(int)
         model_df["suggested_transfer"] = round_series_half_up(model_df["suggested_transfer"]).fillna(0).astype(int)
         model_df["doi"] = round_series_half_up(model_df["doi"]).fillna(0).astype(int)
-        model_df["pareto_class"] = model_df["pareto_class"].fillna("").astype(str).str.strip()
         model_df["stock_status"] = model_df["stock_status"].fillna("").astype(str).str.strip()
         model_df["model"] = model_df["model"].fillna("").astype(str).str.strip()
         model_df = model_df.sort_values(["suggested_transfer", "doi"], ascending=[False, True]).reset_index(drop=True)
@@ -3298,7 +3363,6 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
         for i, (title, value, badge, accent_color) in enumerate(branch_cards):
             ppt_add_metric_card(slide, Inches(0.55 + i * 3.08), Inches(1.47), Inches(2.82), Inches(1.52), title, value, badge, accent_color, colors)
 
-        counts = model_df["Class"].value_counts().to_dict() if not model_df.empty else {}
         info = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.55), Inches(3.33), Inches(12.2), Inches(2.75))
         info.fill.solid(); info.fill.fore_color.rgb = ppt_rgb(colors["surface"]); info.line.color.rgb = ppt_rgb(colors["border"])
         box = slide.shapes.add_textbox(Inches(0.83), Inches(3.65), Inches(11.5), Inches(2.15))
@@ -3307,8 +3371,8 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
             f"Branch: {branch}",
             f"Area: {selected_area if selected_area != 'All Areas' else (bdf['area'].iloc[0] if not bdf.empty else '—')}",
             f"Models / stock-status records: {len(model_df):,}",
-            f"Class A: {counts.get('Class A', 0):,} • Class B: {counts.get('Class B', 0):,} • Class C: {counts.get('Class C', 0):,}",
-            "The detailed model slides that follow preserve the dashboard's stock status, inventory, suggested transfer, and DOI fields.",
+            f"Class A models shown in presentation: {len(model_df):,}",
+            "Detailed model slides are intentionally limited to Class A models only; stock status, inventory, suggested transfer, and DOI are retained.",
         ]
         for idx, line in enumerate(lines):
             p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
@@ -3339,7 +3403,7 @@ with tab_inventory:
     # =========================================================
     # 4A. MUTI MC TRENDS HEADER + DATA SYNC ACTION
     # =========================================================
-    trend_title_col, trend_sync_col = st.columns([5.45, 0.55], gap="small", vertical_alignment="center")
+    trend_title_col, trend_sync_col = st.columns([4.45, 1.55], gap="small", vertical_alignment="center")
 
     with trend_title_col:
         st.markdown(
@@ -3355,15 +3419,15 @@ with tab_inventory:
 
     with trend_sync_col:
         st.markdown(
-            '<div class="data-sync-shell"><span class="data-sync-caption">Latest workbook</span></div>',
+            '<div class="data-sync-shell"><span class="data-sync-caption">Sync workbook • Export deck</span></div>',
             unsafe_allow_html=True,
         )
         if st.button(
-            "Data Sync",
+            "Data Sync + Export",
             type="primary",
             width="stretch",
             key="open_scm_data_sync_dialog",
-            help="Validate and synchronize the latest SCM Excel workbook.",
+            help="Open the combined Data Sync and PowerPoint export workflow.",
         ):
             data_sync_dialog()
 
@@ -3586,6 +3650,7 @@ with tab_inventory:
             [area for area in raw_data["area"].dropna().unique() if str(area).strip()]
         )
         selected_area = st.selectbox("NETWORK SCOPE", areas)
+        st.session_state["selected_scm_area_for_export"] = selected_area
 
     area_data = raw_data.copy()
     if selected_area != "All Areas":
@@ -3610,73 +3675,23 @@ with tab_inventory:
 
 
     # =========================================================
-    # PRESENTATION EXPORT ACTION
+    # PRESENTATION DOWNLOAD — GENERATED FROM DATA SYNC + EXPORT
     # =========================================================
-    export_col1, export_col2 = st.columns([5.1, 0.9], gap="small", vertical_alignment="center")
-    with export_col1:
-        st.markdown(
-            """
-            <div style='padding:12px 0 4px 0;'>
-                <div style='font-size:0.86rem;font-weight:900;letter-spacing:0.04em;'>
-                    PRESENTATION EXPORT
-                </div>
-                <div style='font-size:0.72rem;color:#94a3b8;line-height:1.45;'>
-                    Builds a PowerPoint deck containing YTD + Weekly trends, per-area risk,
-                    performance overview, Class A branch ranking, and every branch's rates
-                    plus model-level stock status, inventory, transfer and DOI.
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    with export_col2:
-        export_clicked = st.button(
-            "📊 Export Presentation",
-            type="primary",
-            width="stretch",
-            key="export_scm_presentation",
-            help="Generate an executive PowerPoint presentation from the active dashboard data.",
-        )
-
-    if export_clicked:
-        if not PPTX_EXPORT_AVAILABLE or not MATPLOTLIB_AVAILABLE:
-            st.error(
-                "Presentation export requires `python-pptx` and `matplotlib`. "
-                "Add both packages to requirements.txt, then redeploy the Streamlit app."
-            )
-        else:
-            try:
-                with st.spinner("Building executive PowerPoint presentation…"):
-                    presentation_bytes = build_scm_presentation(
-                        raw_data,
-                        kpi_ytd,
-                        kpi_weekly,
-                        selected_area,
-                    )
-                st.session_state["scm_presentation_bytes"] = presentation_bytes
-                st.session_state["scm_presentation_name"] = (
-                    f"SCM_Control_Tower_{str(selected_area).replace(' ', '_').replace('/', '-')}.pptx"
-                )
-                st.success(
-                    "Presentation created. It includes both YTD and Weekly charts, area analysis, "
-                    "branch performance, and detailed model stock-status slides."
-                )
-            except Exception as exc:
-                st.error(f"Presentation export failed: {exc}")
+    if st.session_state.get("scm_presentation_error"):
+        st.error(f"Presentation export failed: {st.session_state.pop('scm_presentation_error')}")
 
     if st.session_state.get("scm_presentation_bytes"):
+        presentation_name = st.session_state.get(
+            "scm_presentation_name", "SCM_Control_Tower_Presentation.pptx"
+        )
         st.download_button(
             "⬇️ Download PowerPoint Presentation",
             data=st.session_state["scm_presentation_bytes"],
-            file_name=st.session_state.get(
-                "scm_presentation_name", "SCM_Control_Tower_Presentation.pptx"
-            ),
+            file_name=presentation_name,
             mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
             width="content",
             key="download_scm_presentation",
         )
-
 
 
     # =========================================================
