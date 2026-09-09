@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -9,7 +8,6 @@ import io
 import requests
 import hashlib
 import html
-import base64
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, datetime
 from urllib.parse import quote
@@ -609,6 +607,18 @@ st.markdown(
             text-align: right;
             font-variant-numeric: tabular-nums;
             white-space: nowrap;
+        }
+
+        /* Operational model fields: Rank / Status / Inventory / Transfer / DOI */
+        .pareto-html-table .center {
+            text-align: center !important;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+
+        .pareto-html-table th.center,
+        .pareto-html-table td.center {
+            text-align: center !important;
         }
 
         /* Model action columns: Rank / Status / Inventory / Transfer / DOI centered. */
@@ -1935,32 +1945,18 @@ def data_sync_dialog():
     file_size_mb = len(file_bytes) / (1024 * 1024)
     st.caption(f"Selected: {dialog_file.name} • {file_size_mb:.2f} MB")
 
-    action_col1, action_col2, info_col = st.columns([1.1, 1.45, 1.65], gap="small")
-    with action_col1:
+    action_col, info_col = st.columns([1.25, 2.75], gap="small")
+    with action_col:
         do_import = st.button(
             "Validate & Sync",
             type="primary",
             width="stretch",
             key="scm_data_sync_confirm_button",
         )
-    with action_col2:
-        do_sync_export = st.button(
-            "Sync + Export PPT",
-            type="primary",
-            width="stretch",
-            key="scm_data_sync_export_button",
-            help="Validate the workbook, synchronize it, then generate the presentation using the synced data.",
-        )
     with info_col:
         st.caption(
-            "Sync only keeps the dashboard live. Sync + Export also creates the PowerPoint with YTD/Weekly trends, Class A models only, and Greatwall excluded from the presentation."
+            "Import and synchronize the SCM Excel workbook. Presentation export is handled separately from the Data Actions menu."
         )
-
-    if do_sync_export:
-        do_import = True
-        sync_and_export = True
-    else:
-        sync_and_export = False
 
     if do_import:
         upload_hash = hashlib.sha256(file_bytes).hexdigest()
@@ -1977,26 +1973,10 @@ def data_sync_dialog():
 
         st.session_state["scm_last_successful_upload_hash"] = upload_hash
         st.session_state["scm_import_success"] = success_message
+        # Clear cached presentation artifacts. The next render rebuilds the
+        # presentation silently from the newly synchronized workbook.
         st.cache_data.clear()
-
-        if sync_and_export:
-            try:
-                with st.spinner("Building PowerPoint from the synchronized workbook…"):
-                    synced_raw, synced_ytd, synced_weekly = process_excel_file(io.BytesIO(file_bytes))
-                    presentation_bytes = build_scm_presentation(
-                        synced_raw,
-                        synced_ytd,
-                        synced_weekly,
-                        st.session_state.get("selected_scm_area_for_export", "All Areas"),
-                    )
-                st.session_state["scm_presentation_bytes"] = presentation_bytes
-                st.session_state["scm_presentation_name"] = (
-                    f"SCM_Control_Tower_{str(st.session_state.get('selected_scm_area_for_export', 'All Areas')).replace(' ', '_').replace('/', '-')}.pptx"
-                )
-                st.session_state["scm_import_success"] = success_message + " Presentation also generated."
-            except Exception as exc:
-                st.session_state["scm_import_success"] = success_message
-                st.session_state["scm_presentation_error"] = str(exc)
+        st.session_state.pop("scm_presentation_error", None)
         st.rerun()
 
 # =========================================================
@@ -3409,6 +3389,16 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
     return output.getvalue()
 
 
+@st.cache_data(show_spinner=False)
+def cached_scm_presentation(workbook_bytes, selected_area, theme_name):
+    """Silently prepare the PowerPoint so the visible Export button is itself the download."""
+    raw_data, kpi_ytd, kpi_weekly = process_excel_file(io.BytesIO(workbook_bytes))
+    # theme_name is included in the cache key because the presentation styling follows
+    # the active dashboard theme through the existing global presentation helpers.
+    _ = theme_name
+    return build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area)
+
+
 # =========================================================
 # INITIALIZE PRIMARY TABS
 # =========================================================
@@ -3416,67 +3406,19 @@ tab_inventory, tab_procurements = st.tabs(["📊 Inventory Control Tower", "📦
 
 with tab_inventory:
     # =========================================================
-    # 4A. MUTI MC TRENDS HEADER + DATA SYNC ACTION
+    # 4A. MUTI MC TRENDS HEADER
     # =========================================================
-    trend_title_col, trend_sync_col = st.columns([4.45, 1.55], gap="small", vertical_alignment="center")
-
+    trend_title_col = st.container()
     with trend_title_col:
         st.markdown(
             """
             <div class="section-heading trend-heading-inline">
                 <span class="dot"></span>
                 <span class="title">MUTI MC Trends</span>
-                
             </div>
             """,
             unsafe_allow_html=True,
         )
-
-    with trend_sync_col:
-        st.markdown(
-            '<div class="data-sync-shell"><span class="data-sync-caption">Data actions</span></div>',
-            unsafe_allow_html=True,
-        )
-        with st.popover("Data Actions ▾", width="stretch"):
-            st.markdown(
-                "<div style='font-weight:850; font-size:0.78rem; color:var(--scm-muted); margin-bottom:0.35rem;'>WORKBOOK & PRESENTATION</div>",
-                unsafe_allow_html=True,
-            )
-            if st.button(
-                "📥 Data Sync",
-                type="primary",
-                width="stretch",
-                key="open_scm_data_sync_dialog",
-                help="Open the workbook import and synchronization dialog.",
-            ):
-                data_sync_dialog()
-
-            if st.button(
-                "📊 Export Presentation",
-                width="stretch",
-                key="generate_scm_presentation",
-                help="Build and automatically download the PowerPoint from the current synchronized dashboard data.",
-            ):
-                try:
-                    current_area = st.session_state.get("selected_scm_area_for_export", "All Areas")
-                    current_raw, current_ytd, current_weekly = process_excel_file(
-                        io.BytesIO(st.session_state["scm_workbook_bytes"])
-                    )
-                    # Build silently. No spinner/progress message is displayed to the user.
-                    presentation_bytes = build_scm_presentation(
-                        current_raw, current_ytd, current_weekly, current_area
-                    )
-                    presentation_name = (
-                        f"SCM_Control_Tower_{current_area.replace(' ', '_')}_Presentation.pptx"
-                    )
-                    st.session_state["scm_presentation_bytes"] = presentation_bytes
-                    st.session_state["scm_presentation_name"] = presentation_name
-                    st.session_state.pop("scm_presentation_error", None)
-                    st.session_state["scm_auto_download_presentation"] = True
-                    st.rerun()
-                except Exception as exc:
-                    st.session_state["scm_presentation_error"] = str(exc)
-                    st.rerun()
 
     import_success = st.session_state.pop("scm_import_success", None)
     if import_success:
@@ -3720,61 +3662,55 @@ with tab_inventory:
             unsafe_allow_html=True,
         )
 
-
     # =========================================================
-    # PRESENTATION DOWNLOAD — GENERATED FROM DATA SYNC + EXPORT
+    # DATA ACTIONS — IMPORT POPUP + DIRECT POWERPOINT DOWNLOAD
     # =========================================================
-    if st.session_state.get("scm_presentation_error"):
-        st.error(f"Presentation export failed: {st.session_state.pop('scm_presentation_error')}")
+    action_col, action_note_col = st.columns([1.55, 4.45], gap="small", vertical_alignment="center")
 
-    if st.session_state.get("scm_presentation_bytes"):
-        presentation_name = st.session_state.get(
-            "scm_presentation_name", "SCM_Control_Tower_Presentation.pptx"
-        )
-        presentation_bytes = st.session_state["scm_presentation_bytes"]
-
-        # Automatic browser download immediately after presentation generation.
-        # Uses a temporary in-browser Blob and programmatically clicks an anchor;
-        # this avoids Kaleido/Chrome and does not require another visible button click.
-        if st.session_state.pop("scm_auto_download_presentation", False):
-            presentation_b64 = base64.b64encode(presentation_bytes).decode("ascii")
-            safe_name = html.escape(presentation_name, quote=True)
-            components.html(
-                f"""
-                <script>
-                (() => {{
-                    const b64 = {presentation_b64!r};
-                    const binary = atob(b64);
-                    const bytes = new Uint8Array(binary.length);
-                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                    const blob = new Blob([bytes], {{
-                        type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
-                    }});
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = '{safe_name}';
-                    a.style.display = 'none';
-                    document.body.appendChild(a);
-                    a.click();
-                    setTimeout(() => {{
-                        URL.revokeObjectURL(url);
-                        a.remove();
-                    }}, 3000);
-                }})();
-                </script>
-                """,
-                height=0,
+    with action_col:
+        with st.popover("Data Actions ▾", width="stretch"):
+            st.markdown(
+                "<div style='font-weight:850; font-size:0.78rem; color:var(--scm-muted); margin-bottom:0.45rem;'>WORKBOOK & PRESENTATION</div>",
+                unsafe_allow_html=True,
             )
 
-        # Keep a fallback download control available without displaying a build/progress message.
-        st.download_button(
-            "⬇️ Download PowerPoint Presentation",
-            data=presentation_bytes,
-            file_name=presentation_name,
-            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            width="content",
-            key="download_scm_presentation",
+            if st.button(
+                "📥 Data Sync",
+                type="primary",
+                width="stretch",
+                key="open_scm_data_sync_dialog",
+                help="Open the workbook import and synchronization dialog.",
+            ):
+                data_sync_dialog()
+
+            # The presentation is silently prepared before this control is rendered.
+            # Therefore this SAME control is the download action—there is no second
+            # 'Download PowerPoint Presentation' button and no build/progress message.
+            presentation_bytes = cached_scm_presentation(
+                saved_workbook_bytes,
+                selected_area,
+                SCM_THEME,
+            )
+            presentation_name = (
+                f"SCM_Control_Tower_{str(selected_area).replace(' ', '_').replace('/', '-')}_Presentation.pptx"
+            )
+
+            st.download_button(
+                "📊 Export Presentation",
+                data=presentation_bytes,
+                file_name=presentation_name,
+                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                width="stretch",
+                key="export_scm_presentation_direct",
+                help="Download the prepared PowerPoint presentation. YTD/Weekly trends are included; detailed model slides are Class A only and Greatwall is excluded from the presentation.",
+            )
+
+    with action_note_col:
+        st.markdown(
+            "<div style='padding-top:10px; color:var(--scm-muted); font-size:0.76rem;'>"
+            "Data Sync opens the Excel import field. Export Presentation directly downloads the prepared PowerPoint for the selected network scope."
+            "</div>",
+            unsafe_allow_html=True,
         )
 
 
