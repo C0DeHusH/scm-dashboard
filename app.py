@@ -2574,7 +2574,7 @@ def ppt_theme_colors():
 
 def ppt_add_background(slide, colors):
     fill = slide.background.fill
-    fill.solid()
+    _ = fill.solid()
     fill.fore_color.rgb = ppt_rgb(colors["bg"])
 
 
@@ -2583,13 +2583,13 @@ def ppt_add_title(slide, title, subtitle="", colors=None):
     shape = slide.shapes.add_shape(
         MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), PPT_W, Inches(0.14)
     )
-    shape.fill.solid()
+    _ = shape.fill.solid()
     shape.fill.fore_color.rgb = ppt_rgb(colors["accent"])
-    shape.line.fill.background()
+    _ = shape.line.fill.background()
 
     tx = slide.shapes.add_textbox(Inches(0.55), Inches(0.34), Inches(12.2), Inches(0.62))
     tf = tx.text_frame
-    tf.clear()
+    _ = tf.clear()
     p = tf.paragraphs[0]
     p.text = title
     p.font.name = "Aptos Display"
@@ -2598,9 +2598,9 @@ def ppt_add_title(slide, title, subtitle="", colors=None):
     p.font.color.rgb = ppt_rgb(colors["text"])
 
     if subtitle:
-        st = slide.shapes.add_textbox(Inches(0.57), Inches(0.92), Inches(12.0), Inches(0.34))
-        sf = st.text_frame
-        sf.clear()
+        st_box = slide.shapes.add_textbox(Inches(0.57), Inches(0.92), Inches(12.0), Inches(0.34))
+        sf = st_box.text_frame
+        _ = sf.clear()
         sp = sf.paragraphs[0]
         sp.text = subtitle
         sp.font.name = "Aptos"
@@ -2612,7 +2612,7 @@ def ppt_add_footer(slide, text, colors=None):
     colors = colors or ppt_theme_colors()
     box = slide.shapes.add_textbox(Inches(0.55), Inches(7.12), Inches(12.2), Inches(0.20))
     tf = box.text_frame
-    tf.clear()
+    _ = tf.clear()
     p = tf.paragraphs[0]
     p.text = text
     p.font.name = "Aptos"
@@ -2626,13 +2626,13 @@ def ppt_add_panel(slide, x, y, w, h, title, colors=None):
     shape = slide.shapes.add_shape(
         MSO_SHAPE.ROUNDED_RECTANGLE, x, y, w, h
     )
-    shape.fill.solid()
+    _ = shape.fill.solid()
     shape.fill.fore_color.rgb = ppt_rgb(colors["surface"])
     shape.line.color.rgb = ppt_rgb(colors["border"])
     shape.line.width = Pt(0.8)
     title_box = slide.shapes.add_textbox(x + Inches(0.18), y + Inches(0.12), w - Inches(0.35), Inches(0.28))
     tf = title_box.text_frame
-    tf.clear()
+    _ = tf.clear()
     p = tf.paragraphs[0]
     p.text = title
     p.font.name = "Aptos"
@@ -2645,19 +2645,19 @@ def ppt_add_panel(slide, x, y, w, h, title, colors=None):
 def ppt_add_metric_card(slide, x, y, w, h, title, value, badge, accent, colors=None):
     colors = colors or ppt_theme_colors()
     card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, x, y, w, h)
-    card.fill.solid()
+    _ = card.fill.solid()
     card.fill.fore_color.rgb = ppt_rgb(colors["surface"])
     card.line.color.rgb = ppt_rgb(colors["border"])
     card.line.width = Pt(0.8)
 
     stripe = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, x, y, Inches(0.05), h)
-    stripe.fill.solid()
+    _ = stripe.fill.solid()
     stripe.fill.fore_color.rgb = ppt_rgb(accent)
-    stripe.line.fill.background()
+    _ = stripe.line.fill.background()
 
     tb = slide.shapes.add_textbox(x + Inches(0.16), y + Inches(0.12), w - Inches(0.28), Inches(0.27))
     tf = tb.text_frame
-    tf.clear()
+    _ = tf.clear()
     p = tf.paragraphs[0]
     p.text = title.upper()
     p.font.name = "Aptos"
@@ -2667,7 +2667,7 @@ def ppt_add_metric_card(slide, x, y, w, h, title, value, badge, accent, colors=N
 
     vb = slide.shapes.add_textbox(x + Inches(0.16), y + Inches(0.43), w - Inches(0.28), Inches(0.52))
     vf = vb.text_frame
-    vf.clear()
+    _ = vf.clear()
     vp = vf.paragraphs[0]
     vp.text = str(value)
     vp.font.name = "Aptos Display"
@@ -2677,7 +2677,7 @@ def ppt_add_metric_card(slide, x, y, w, h, title, value, badge, accent, colors=N
 
     bb = slide.shapes.add_textbox(x + Inches(0.16), y + h - Inches(0.33), w - Inches(0.28), Inches(0.20))
     bf = bb.text_frame
-    bf.clear()
+    _ = bf.clear()
     bp = bf.paragraphs[0]
     bp.text = badge.upper()
     bp.font.name = "Aptos"
@@ -2687,7 +2687,7 @@ def ppt_add_metric_card(slide, x, y, w, h, title, value, badge, accent, colors=N
 
 
 def ppt_add_image(slide, image_bytes, x, y, w, h):
-    slide.shapes.add_picture(io.BytesIO(image_bytes), x, y, width=w, height=h)
+    _ = slide.shapes.add_picture(io.BytesIO(image_bytes), x, y, width=w, height=h)
 
 
 def _mpl_hex(value, fallback="#94a3b8"):
@@ -2971,7 +2971,7 @@ def ppt_figure_png(fig, width=1500, height=820):
         bbox_inches="tight",
         pad_inches=0.12,
     )
-    plt.close(mpl_fig)
+    _ = plt.close(mpl_fig)
     return output.getvalue()
 
 
@@ -2980,7 +2980,7 @@ def ppt_add_table(slide, df, x, y, w, h, title, colors=None, font_size=7.4):
     if df is None or df.empty:
         empty = slide.shapes.add_textbox(x, y + Inches(0.45), w, Inches(0.35))
         tf = empty.text_frame
-        tf.clear()
+        _ = tf.clear()
         p = tf.paragraphs[0]
         p.text = "No model records available."
         p.font.size = Pt(9)
@@ -2989,7 +2989,7 @@ def ppt_add_table(slide, df, x, y, w, h, title, colors=None, font_size=7.4):
 
     title_box = slide.shapes.add_textbox(x, y, w, Inches(0.28))
     tf = title_box.text_frame
-    tf.clear()
+    _ = tf.clear()
     p = tf.paragraphs[0]
     p.text = title
     p.font.name = "Aptos"
@@ -3017,7 +3017,7 @@ def ppt_add_table(slide, df, x, y, w, h, title, colors=None, font_size=7.4):
     for c, header in enumerate(headers):
         cell = table.cell(0, c)
         cell.text = str(header)
-        cell.fill.solid()
+        _ = cell.fill.solid()
         cell.fill.fore_color.rgb = ppt_rgb(colors["surface2"])
         cell.text_frame.paragraphs[0].font.bold = True
         cell.text_frame.paragraphs[0].font.size = Pt(font_size)
@@ -3030,7 +3030,7 @@ def ppt_add_table(slide, df, x, y, w, h, title, colors=None, font_size=7.4):
             cell = table.cell(r, c)
             value = row[header]
             cell.text = str(value)
-            cell.fill.solid()
+            _ = cell.fill.solid()
             cell.fill.fore_color.rgb = ppt_rgb(colors["surface"])
             cell.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
             p = cell.text_frame.paragraphs[0]
@@ -3113,37 +3113,60 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
     slide = prs.slides.add_slide(blank)
     ppt_add_background(slide, colors)
     cover = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.60), Inches(0.75), Inches(12.1), Inches(5.65))
-    cover.fill.solid()
+    _ = cover.fill.solid()
     cover.fill.fore_color.rgb = ppt_rgb(colors["surface"])
     cover.line.color.rgb = ppt_rgb(colors["border"])
     cover.line.width = Pt(1)
 
     accent = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.60), Inches(0.75), Inches(0.12), Inches(5.65))
-    accent.fill.solid(); accent.fill.fore_color.rgb = ppt_rgb(colors["accent"]); accent.line.fill.background()
+    _ = accent.fill.solid()
+    accent.fill.fore_color.rgb = ppt_rgb(colors["accent"])
+    _ = accent.line.fill.background()
 
     tb = slide.shapes.add_textbox(Inches(1.05), Inches(1.30), Inches(10.7), Inches(0.65))
-    tf = tb.text_frame; tf.clear(); p = tf.paragraphs[0]
+    tf = tb.text_frame
+    _ = tf.clear()
+    p = tf.paragraphs[0]
     p.text = "MUTI MC SCM EXECUTIVE CONTROL TOWER"
-    p.font.name = "Aptos Display"; p.font.size = Pt(28); p.font.bold = True; p.font.color.rgb = ppt_rgb(colors["text"])
+    p.font.name = "Aptos Display"
+    p.font.size = Pt(28)
+    p.font.bold = True
+    p.font.color.rgb = ppt_rgb(colors["text"])
 
     sb = slide.shapes.add_textbox(Inches(1.08), Inches(2.02), Inches(10.5), Inches(0.65))
-    sf = sb.text_frame; sf.clear(); sp = sf.paragraphs[0]
+    sf = sb.text_frame
+    _ = sf.clear()
+    sp = sf.paragraphs[0]
     sp.text = "Inventory visibility • stockout risk • branch action intelligence"
-    sp.font.name = "Aptos"; sp.font.size = Pt(15); sp.font.color.rgb = ppt_rgb(colors["muted"])
+    sp.font.name = "Aptos"
+    sp.font.size = Pt(15)
+    sp.font.color.rgb = ppt_rgb(colors["muted"])
 
     scope_box = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(1.08), Inches(3.04), Inches(4.20), Inches(1.45))
-    scope_box.fill.solid(); scope_box.fill.fore_color.rgb = ppt_rgb(colors["surface2"]); scope_box.line.color.rgb = ppt_rgb(colors["border"])
-    st = slide.shapes.add_textbox(Inches(1.33), Inches(3.27), Inches(3.7), Inches(0.9))
-    stf = st.text_frame; stf.clear()
-    sp = stf.paragraphs[0]; sp.text = f"NETWORK SCOPE\n{selected_area}"; sp.font.name = "Aptos"; sp.font.size = Pt(13); sp.font.bold = True; sp.font.color.rgb = ppt_rgb(colors["text"])
+    _ = scope_box.fill.solid()
+    scope_box.fill.fore_color.rgb = ppt_rgb(colors["surface2"])
+    scope_box.line.color.rgb = ppt_rgb(colors["border"])
+    st_box = slide.shapes.add_textbox(Inches(1.33), Inches(3.27), Inches(3.7), Inches(0.9))
+    stf = st_box.text_frame
+    _ = stf.clear()
+    sp = stf.paragraphs[0]
+    sp.text = f"NETWORK SCOPE\n{selected_area}"
+    sp.font.name = "Aptos"
+    sp.font.size = Pt(13)
+    sp.font.bold = True
+    sp.font.color.rgb = ppt_rgb(colors["text"])
 
     stats = slide.shapes.add_textbox(Inches(5.75), Inches(3.08), Inches(6.0), Inches(1.45))
-    tf = stats.text_frame; tf.clear()
+    tf = stats.text_frame
+    _ = tf.clear()
     for idx, (label, val) in enumerate([
         ("Branches", branch_count), ("Models", model_count), ("Stock records", f"{record_count:,}"),
     ]):
         p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
-        p.text = f"{label}: {val}"; p.font.name = "Aptos"; p.font.size = Pt(12); p.font.color.rgb = ppt_rgb(colors["text"])
+        p.text = f"{label}: {val}"
+        p.font.name = "Aptos"
+        p.font.size = Pt(12)
+        p.font.color.rgb = ppt_rgb(colors["text"])
         p.space_after = Pt(6)
 
     latest_dates = pd.concat([
@@ -3152,9 +3175,13 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
     ], ignore_index=True).dropna()
     latest_label = latest_dates.max().strftime("%d %b %Y") if not latest_dates.empty else "No KPI date"
     fb = slide.shapes.add_textbox(Inches(1.08), Inches(5.55), Inches(10.9), Inches(0.45))
-    ftf = fb.text_frame; ftf.clear(); fp = ftf.paragraphs[0]
+    ftf = fb.text_frame
+    _ = ftf.clear()
+    fp = ftf.paragraphs[0]
     fp.text = f"Presentation date: {date.today().strftime('%d %b %Y')}  •  Latest KPI observation: {latest_label}"
-    fp.font.name = "Aptos"; fp.font.size = Pt(9); fp.font.color.rgb = ppt_rgb(colors["muted"])
+    fp.font.name = "Aptos"
+    fp.font.size = Pt(9)
+    fp.font.color.rgb = ppt_rgb(colors["muted"])
     ppt_add_footer(slide, "SCM Executive Control Tower • Generated from dashboard source data", colors)
 
     # ----- Trend slides: YTD and Weekly -----
@@ -3257,9 +3284,12 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
         ppt_add_metric_card(slide, Inches(0.55 + i * 3.08), Inches(1.65), Inches(2.82), Inches(1.65), title, value, badge, accent, colors)
 
     detail_box = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.55), Inches(3.65), Inches(12.2), Inches(2.35))
-    detail_box.fill.solid(); detail_box.fill.fore_color.rgb = ppt_rgb(colors["surface"]); detail_box.line.color.rgb = ppt_rgb(colors["border"])
+    _ = detail_box.fill.solid()
+    detail_box.fill.fore_color.rgb = ppt_rgb(colors["surface"])
+    detail_box.line.color.rgb = ppt_rgb(colors["border"])
     detail = slide.shapes.add_textbox(Inches(0.82), Inches(3.95), Inches(11.6), Inches(1.8))
-    tf = detail.text_frame; tf.clear()
+    tf = detail.text_frame
+    _ = tf.clear()
     bullets = [
         f"Network scope: {selected_area}",
         f"Active branches: {branch_count:,}",
@@ -3269,7 +3299,11 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
     ]
     for idx, text_value in enumerate(bullets):
         p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
-        p.text = "• " + text_value; p.font.name = "Aptos"; p.font.size = Pt(11); p.font.color.rgb = ppt_rgb(colors["text"]); p.space_after = Pt(6)
+        p.text = "• " + text_value
+        p.font.name = "Aptos"
+        p.font.size = Pt(11)
+        p.font.color.rgb = ppt_rgb(colors["text"])
+        p.space_after = Pt(6)
     ppt_add_footer(slide, f"Performance overview • {selected_area}", colors)
 
     # ----- Class A branch ranking -----
@@ -3360,9 +3394,12 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
             ppt_add_metric_card(slide, Inches(0.55 + i * 3.08), Inches(1.47), Inches(2.82), Inches(1.52), title, value, badge, accent_color, colors)
 
         info = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.55), Inches(3.33), Inches(12.2), Inches(2.75))
-        info.fill.solid(); info.fill.fore_color.rgb = ppt_rgb(colors["surface"]); info.line.color.rgb = ppt_rgb(colors["border"])
+        _ = info.fill.solid()
+        info.fill.fore_color.rgb = ppt_rgb(colors["surface"])
+        info.line.color.rgb = ppt_rgb(colors["border"])
         box = slide.shapes.add_textbox(Inches(0.83), Inches(3.65), Inches(11.5), Inches(2.15))
-        tf = box.text_frame; tf.clear()
+        tf = box.text_frame
+        _ = tf.clear()
         lines = [
             f"Branch: {branch}",
             f"Area: {selected_area if selected_area != 'All Areas' else (bdf['area'].iloc[0] if not bdf.empty else '—')}",
@@ -3372,7 +3409,11 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
         ]
         for idx, line in enumerate(lines):
             p = tf.paragraphs[0] if idx == 0 else tf.add_paragraph()
-            p.text = "• " + line; p.font.name = "Aptos"; p.font.size = Pt(10.5); p.font.color.rgb = ppt_rgb(colors["text"]); p.space_after = Pt(5)
+            p.text = "• " + line
+            p.font.name = "Aptos"
+            p.font.size = Pt(10.5)
+            p.font.color.rgb = ppt_rgb(colors["text"])
+            p.space_after = Pt(5)
         ppt_add_footer(slide, f"Branch performance • {branch} • {selected_area}", colors)
 
         page_size = 16
@@ -3385,8 +3426,7 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
             ppt_add_table(model_slide, page_df, Inches(0.55), Inches(1.42), Inches(12.2), Inches(5.45), "Operational model action list", colors, font_size=7.5)
             ppt_add_footer(model_slide, f"Model stock status • {branch} • Inventory / Transfer / DOI", colors)
 
-    output = io.BytesIO()
-    prs.save(output)
+    _ = prs.save(output)
     return output.getvalue()
 
 
@@ -3401,7 +3441,7 @@ def cached_scm_presentation(workbook_bytes, selected_area, theme_name):
 
 
 # =========================================================
-# INITIALIZE PRIMARY TABS
+# INITIALIZE PRIMARY TABS & DATA ACTIONS
 # =========================================================
 tab_inventory, tab_procurements = st.tabs(["📊 Inventory Control Tower", "📦 Procurements"])
 
@@ -3451,7 +3491,7 @@ with tab_inventory:
                     )
                     presentation_name = f"SCM_Control_Tower_{str(export_area).replace(' ', '_').replace('/', '-')}_Presentation.pptx"
 
-                # Replaces the old `components.html()` hack that produced the blank "None" message box
+                # Native Streamlit download button perfectly prevents layout manipulation hacks
                 st.download_button(
                     label="📊 Export Presentation",
                     data=presentation_bytes,
