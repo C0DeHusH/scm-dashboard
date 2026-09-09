@@ -8,6 +8,8 @@ import io
 import requests
 import hashlib
 import html
+import base64
+import streamlit.components.v1 as components
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, datetime
 from urllib.parse import quote
@@ -3683,32 +3685,36 @@ with tab_inventory:
             ):
                 data_sync_dialog()
 
-            # The presentation is silently prepared before this control is rendered.
-            # Therefore this SAME control is the download action—there is no second
-            # 'Download PowerPoint Presentation' button and no build/progress message.
-            presentation_bytes = cached_scm_presentation(
-                saved_workbook_bytes,
-                selected_area,
-                SCM_THEME,
-            )
-            presentation_name = (
-                f"SCM_Control_Tower_{str(selected_area).replace(' ', '_').replace('/', '-')}_Presentation.pptx"
-            )
-
-            st.download_button(
+            # The presentation is prepared on-demand and triggers an automatic browser download.
+            if st.button(
                 "📊 Export Presentation",
-                data=presentation_bytes,
-                file_name=presentation_name,
-                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
                 width="stretch",
-                key="export_scm_presentation_direct",
+                key="export_scm_presentation_action",
                 help="Download the prepared PowerPoint presentation. YTD/Weekly trends are included; detailed model slides are Class A only and Greatwall is excluded from the presentation.",
-            )
+            ):
+                with st.spinner("Generating presentation..."):
+                    presentation_bytes = cached_scm_presentation(
+                        saved_workbook_bytes,
+                        selected_area,
+                        SCM_THEME,
+                    )
+                    presentation_name = (
+                        f"SCM_Control_Tower_{str(selected_area).replace(' ', '_').replace('/', '-')}_Presentation.pptx"
+                    )
+                    b64 = base64.b64encode(presentation_bytes).decode()
+                    dl_link = f"""
+                    <a id="auto-download" href="data:application/vnd.openxmlformats-officedocument.presentationml.presentation;base64,{b64}" download="{presentation_name}"></a>
+                    <script>
+                        document.getElementById('auto-download').click();
+                    </script>
+                    """
+                    components.html(dl_link, height=0)
+
 
     with action_note_col:
         st.markdown(
             "<div style='padding-top:10px; color:var(--scm-muted); font-size:0.76rem;'>"
-            "Data Sync opens the Excel import field. Export Presentation directly downloads the prepared PowerPoint for the selected network scope."
+            "Data Sync opens the Excel import field. Export Presentation generates and automatically downloads the prepared PowerPoint for the selected network scope."
             "</div>",
             unsafe_allow_html=True,
         )
@@ -3730,19 +3736,43 @@ with tab_inventory:
 
     m1, m2, m3, m4 = st.columns(4, gap="small")
     m1.markdown(
-        performance_card("Class A Rate", rate_a, "Highest-priority Pareto inventory"),
+        card_html(
+            "CLASS A RATE", 
+            rate_a, 
+            "HIGHEST-PRIORITY PARETO INVENTORY", 
+            "red", 
+            "A"
+        ),
         unsafe_allow_html=True,
     )
     m2.markdown(
-        performance_card("Class B Rate", rate_b, "Medium-priority Pareto inventory"),
+        card_html(
+            "CLASS B RATE", 
+            rate_b, 
+            "MEDIUM-PRIORITY PARETO INVENTORY", 
+            "yellow", 
+            "B"
+        ),
         unsafe_allow_html=True,
     )
     m3.markdown(
-        performance_card("Class C Rate", rate_c, "Lower-priority Pareto inventory"),
+        card_html(
+            "CLASS C RATE", 
+            rate_c, 
+            "LOWER-PRIORITY PARETO INVENTORY", 
+            "green", 
+            "C"
+        ),
         unsafe_allow_html=True,
     )
     m4.markdown(
-        performance_card("Average Rate", avg_rate, "Average of Class A, B and C rates"),
+        card_html(
+            "AVERAGE RATE", 
+            avg_rate, 
+            "PERFORMANCE INDEX", 
+            "blue", 
+            "Σ"
+        ),
         unsafe_allow_html=True,
     )
 
