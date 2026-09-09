@@ -1611,9 +1611,7 @@ with st.container(key="scm_executive_header"):
                     Inventory visibility, Pareto risk prioritization, stockout trends,
                     Days of Inventory, and branch-level action monitoring.
                 </div>
-                <a href="https://scmdrp.streamlit.app/" target="_blank" class="drp-action-btn">
-                    Launch Delivery Requirements Plan (DRP) ↗
-                </a>
+        
             </div>
             """,
             unsafe_allow_html=True,
