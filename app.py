@@ -400,6 +400,21 @@ st.markdown(
             display: none !important;
         }
 
+        /* STREAMLIT NATIVE HEADER / TOOLBAR — hidden */
+        [data-testid="stToolbar"],
+        #MainMenu,
+        header[data-testid="stHeader"],
+        [data-testid="stDecoration"],
+        [data-testid="viewerBadge"] {
+            display: none !important;
+            visibility: hidden !important;
+        }
+
+        header[data-testid="stHeader"] {
+            height: 0 !important;
+            min-height: 0 !important;
+        }
+
         /* Data Sync action beside MUTI MC Trends */
         .data-sync-caption {
             display: block;
