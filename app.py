@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -8,6 +9,7 @@ import io
 import requests
 import hashlib
 import html
+import base64
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, datetime
 from urllib.parse import quote
@@ -3453,19 +3455,24 @@ with tab_inventory:
                 "📊 Export Presentation",
                 width="stretch",
                 key="generate_scm_presentation",
-                help="Build the PowerPoint from the current synchronized dashboard data.",
+                help="Build and automatically download the PowerPoint from the current synchronized dashboard data.",
             ):
                 try:
                     current_area = st.session_state.get("selected_scm_area_for_export", "All Areas")
-                    current_raw, current_ytd, current_weekly = process_excel_file(io.BytesIO(st.session_state["scm_workbook_bytes"]))
-                    with st.spinner("Building PowerPoint presentation…"):
-                        st.session_state["scm_presentation_bytes"] = build_scm_presentation(
-                            current_raw, current_ytd, current_weekly, current_area
-                        )
-                    st.session_state["scm_presentation_name"] = (
+                    current_raw, current_ytd, current_weekly = process_excel_file(
+                        io.BytesIO(st.session_state["scm_workbook_bytes"])
+                    )
+                    # Build silently. No spinner/progress message is displayed to the user.
+                    presentation_bytes = build_scm_presentation(
+                        current_raw, current_ytd, current_weekly, current_area
+                    )
+                    presentation_name = (
                         f"SCM_Control_Tower_{current_area.replace(' ', '_')}_Presentation.pptx"
                     )
+                    st.session_state["scm_presentation_bytes"] = presentation_bytes
+                    st.session_state["scm_presentation_name"] = presentation_name
                     st.session_state.pop("scm_presentation_error", None)
+                    st.session_state["scm_auto_download_presentation"] = True
                     st.rerun()
                 except Exception as exc:
                     st.session_state["scm_presentation_error"] = str(exc)
@@ -3724,9 +3731,46 @@ with tab_inventory:
         presentation_name = st.session_state.get(
             "scm_presentation_name", "SCM_Control_Tower_Presentation.pptx"
         )
+        presentation_bytes = st.session_state["scm_presentation_bytes"]
+
+        # Automatic browser download immediately after presentation generation.
+        # Uses a temporary in-browser Blob and programmatically clicks an anchor;
+        # this avoids Kaleido/Chrome and does not require another visible button click.
+        if st.session_state.pop("scm_auto_download_presentation", False):
+            presentation_b64 = base64.b64encode(presentation_bytes).decode("ascii")
+            safe_name = html.escape(presentation_name, quote=True)
+            components.html(
+                f"""
+                <script>
+                (() => {{
+                    const b64 = {presentation_b64!r};
+                    const binary = atob(b64);
+                    const bytes = new Uint8Array(binary.length);
+                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                    const blob = new Blob([bytes], {{
+                        type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+                    }});
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = '{safe_name}';
+                    a.style.display = 'none';
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(() => {{
+                        URL.revokeObjectURL(url);
+                        a.remove();
+                    }}, 3000);
+                }})();
+                </script>
+                """,
+                height=0,
+            )
+
+        # Keep a fallback download control available without displaying a build/progress message.
         st.download_button(
             "⬇️ Download PowerPoint Presentation",
-            data=st.session_state["scm_presentation_bytes"],
+            data=presentation_bytes,
             file_name=presentation_name,
             mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
             width="content",
