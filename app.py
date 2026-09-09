@@ -578,10 +578,33 @@ st.markdown(
             background: rgba(99, 102, 241, 0.035);
         }
 
-        .pareto-html-table .num {
-            text-align: right;
+        /* CONSISTENT OPERATIONAL DATA ALIGNMENT */
+        .pareto-html-table th,
+        .pareto-html-table td {
+            vertical-align: middle;
+        }
+
+        .pareto-html-table th.num,
+        .pareto-html-table td.num {
+            text-align: center !important;
             font-variant-numeric: tabular-nums;
             white-space: nowrap;
+        }
+
+        .pareto-html-table td.status-cell,
+        .pareto-html-table th.status-head {
+            text-align: center !important;
+            vertical-align: middle !important;
+        }
+
+        .pareto-html-table td.model-cell,
+        .pareto-html-table th.model-head {
+            text-align: left !important;
+        }
+
+        .pareto-html-table td.status-cell .pareto-status {
+            margin-inline: auto;
+            justify-content: center;
         }
 
         /* WORLD-CLASS STOCK STATUS SYSTEM */
@@ -854,6 +877,19 @@ st.markdown(
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+        }
+
+        .performance-card {
+            min-height: 142px;
+        }
+
+        .performance-card .metric-value {
+            margin-top: 7px;
+            margin-bottom: 7px;
+        }
+
+        .performance-card .metric-footnote {
+            margin-top: 7px;
         }
 
         .metric-title,
@@ -2447,13 +2483,29 @@ def create_styled_line_chart(
 
 
 def performance_card(title, value, note):
-    return f"""
-    <div class='metric-card'>
-        <div class='metric-title'>{title}</div>
-        <div class='metric-value-sm'>{value}%</div>
-        <div class='metric-footnote'>{note}</div>
-    </div>
-    """
+    'Performance Overview uses the same visual language as Branch-Level KPI cards.'
+    badge_map = {
+        'Class A Rate': ('HIGH PRIORITY RISK', 'red', 'A'),
+        'Class B Rate': ('MEDIUM PRIORITY RISK', 'yellow', 'B'),
+        'Class C Rate': ('LOW PRIORITY RISK', 'green', 'C'),
+        'Average Rate': ('PERFORMANCE INDEX', 'blue', 'Σ'),
+    }
+    badge_text, color_theme, icon = badge_map.get(
+        title, ('PERFORMANCE', 'blue', '•')
+    )
+
+    return (
+        f'<div class="metric-card-base performance-card">'
+        f'<div class="metric-header">'
+        f'<span>{html.escape(str(title))}</span>'
+        f'<div class="icon-box">{html.escape(str(icon))}</div>'
+        f'</div>'
+        f'<div class="metric-value">{value}%</div>'
+        f'<div><span class="badge badge-{color_theme}">'
+        f'{html.escape(str(badge_text))}</span></div>'
+        f'<div class="metric-footnote">{html.escape(str(note))}</div>'
+        f'</div>'
+    )
 
 
 def card_html(title, value, badge_text, color_theme, icon):
@@ -3339,12 +3391,12 @@ with tab_inventory:
             status_class = stock_status_style_class(status_text)
             rows_html.append(
                 "<tr>"
-                f"<td class='num'>{int(row['Rank'])}</td>"
-                f"<td>{html.escape(str(row['Model']))}</td>"
-                f"<td><span class='pareto-status {status_class}'>{html.escape(status_text)}</span></td>"
-                f"<td class='num'>{int(row['Inventory']):,}</td>"
-                f"<td class='num'>{int(row['Transfer']):,}</td>"
-                f"<td class='num'>{int(row['DOI']):,}</td>"
+                f"<td class='num rank-cell'>{int(row['Rank'])}</td>"
+                f"<td class='model-cell'>{html.escape(str(row['Model']))}</td>"
+                f"<td class='status-cell'><span class='pareto-status {status_class}'>{html.escape(status_text)}</span></td>"
+                f"<td class='num inventory-cell'>{int(row['Inventory']):,}</td>"
+                f"<td class='num transfer-cell'>{int(row['Transfer']):,}</td>"
+                f"<td class='num doi-cell'>{int(row['DOI']):,}</td>"
                 "</tr>"
             )
 
@@ -3352,16 +3404,16 @@ with tab_inventory:
             "<div class='pareto-html-shell'>"
             "<table class='pareto-html-table'>"
             "<colgroup>"
-            "<col style='width:7%'>"
-            "<col style='width:35%'>"
-            "<col style='width:16%'>"
+            "<col style='width:8%'>"
+            "<col style='width:31%'>"
+            "<col style='width:18%'>"
             "<col style='width:14%'>"
             "<col style='width:14%'>"
-            "<col style='width:14%'>"
+            "<col style='width:15%'>"
             "</colgroup>"
             "<thead><tr>"
-            "<th class='num'>Rank</th><th>Model</th><th>Status</th>"
-            "<th class='num'>Inventory</th><th class='num'>Transfer</th><th class='num'>DOI</th>"
+            "<th class='num rank-head'>Rank</th><th class='model-head'>Model</th><th class='status-head'>Status</th>"
+            "<th class='num inventory-head'>Inventory</th><th class='num transfer-head'>Transfer</th><th class='num doi-head'>DOI</th>"
             "</tr></thead>"
             "<tbody>" + "".join(rows_html) + "</tbody>"
             "</table></div>"
