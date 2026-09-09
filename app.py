@@ -1161,41 +1161,71 @@ st.markdown(
             color: var(--scm-muted) !important;
         }}
 
-        .scm-theme-control-label {{
-            margin: 0 0 0.28rem 0;
-            color: var(--scm-muted);
-            font-size: 0.60rem;
-            font-weight: 850;
-            line-height: 1.1;
-            letter-spacing: 0.10em;
-            text-transform: uppercase;
-            text-align: right;
+        /* -------------------------------------------------
+           CUSTOM 3-DOT THEME MENU
+           Replaces the previous visible Light / Dark buttons.
+           ------------------------------------------------- */
+        .st-key-scm_theme_menu {{
+            display: flex;
+            justify-content: flex-end;
+            align-items: flex-start;
+            width: 100%;
         }}
 
-        .st-key-scm_theme_light button,
-        .st-key-scm_theme_dark button {{
-            min-height: 36px !important;
-            height: 36px !important;
-            padding: 0.25rem 0.65rem !important;
-            border-radius: 10px !important;
+        .st-key-scm_theme_menu [data-testid="stPopover"] {{
+            margin-left: auto !important;
+        }}
+
+        .st-key-scm_theme_menu [data-testid="stPopover"] > button,
+        .st-key-scm_theme_menu button[data-testid="stBaseButton-secondary"] {{
+            width: 42px !important;
+            min-width: 42px !important;
+            max-width: 42px !important;
+            height: 42px !important;
+            min-height: 42px !important;
+            padding: 0 !important;
+            border-radius: 12px !important;
             border: 1px solid var(--scm-border) !important;
             background: var(--scm-surface) !important;
             color: var(--scm-text) !important;
-            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06) !important;
-            font-size: 0.72rem !important;
-            font-weight: 850 !important;
-            white-space: nowrap !important;
+            box-shadow: 0 5px 14px rgba(15, 23, 42, 0.08) !important;
+            font-size: 1.55rem !important;
+            font-weight: 900 !important;
+            line-height: 1 !important;
+            letter-spacing: 0.06em !important;
         }}
 
-        .st-key-scm_theme_light button:hover,
-        .st-key-scm_theme_dark button:hover {{
-            border-color: rgba(99, 102, 241, 0.55) !important;
+        .st-key-scm_theme_menu [data-testid="stPopover"] > button:hover {{
+            border-color: rgba(99, 102, 241, 0.58) !important;
             background: var(--scm-hover) !important;
             transform: translateY(-1px);
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12) !important;
         }}
 
-        .st-key-scm_theme_light button[kind="primary"],
-        .st-key-scm_theme_dark button[kind="primary"] {{
+        /* Theme choices inside the drop-down panel */
+        .st-key-scm_theme_light_menu button,
+        .st-key-scm_theme_dark_menu button {{
+            width: 100% !important;
+            min-height: 39px !important;
+            padding: 0.40rem 0.70rem !important;
+            border-radius: 9px !important;
+            border: 1px solid var(--scm-border) !important;
+            background: var(--scm-surface) !important;
+            color: var(--scm-text) !important;
+            box-shadow: none !important;
+            font-size: 0.76rem !important;
+            font-weight: 800 !important;
+            justify-content: flex-start !important;
+        }}
+
+        .st-key-scm_theme_light_menu button:hover,
+        .st-key-scm_theme_dark_menu button:hover {{
+            background: var(--scm-hover) !important;
+            border-color: rgba(99, 102, 241, 0.48) !important;
+        }}
+
+        .st-key-scm_theme_light_menu button[kind="primary"],
+        .st-key-scm_theme_dark_menu button[kind="primary"] {{
             background: linear-gradient(
                 135deg,
                 rgba(79,70,229,0.98),
@@ -1203,43 +1233,65 @@ st.markdown(
             ) !important;
             border-color: rgba(99, 102, 241, 0.72) !important;
             color: #ffffff !important;
-            box-shadow: 0 7px 18px rgba(37, 99, 235, 0.18) !important;
+        }}
+
+        .scm-theme-menu-title {{
+            color: var(--scm-text);
+            font-size: 0.78rem;
+            font-weight: 900;
+            line-height: 1.25;
+            margin: 0 0 0.10rem 0;
+        }}
+
+        .scm-theme-menu-caption {{
+            color: var(--scm-muted);
+            font-size: 0.66rem;
+            line-height: 1.35;
+            margin: 0 0 0.60rem 0;
         }}
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-theme_space, theme_light_col, theme_dark_col = st.columns(
-    [10.0, 1.0, 1.0],
+# ---------------------------------------------------------
+# TOP-RIGHT 3-DOT APPEARANCE MENU
+# ---------------------------------------------------------
+theme_menu_space, theme_menu_col = st.columns(
+    [24.0, 1.0],
     gap="small",
 )
 
-with theme_space:
-    st.markdown(
-        "<div class='scm-theme-control-label'>Display Theme</div>",
-        unsafe_allow_html=True,
-    )
+with theme_menu_col:
+    with st.container(key="scm_theme_menu"):
+        with st.popover("⋮"):
+            st.markdown(
+                """
+                <div class="scm-theme-menu-title">Appearance</div>
+                <div class="scm-theme-menu-caption">
+                    Choose the dashboard display theme.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-with theme_light_col:
-    st.button(
-        "☀️ Light",
-        key="scm_theme_light",
-        type="primary" if SCM_THEME == "light" else "secondary",
-        use_container_width=True,
-        on_click=set_scm_theme,
-        args=("light",),
-    )
+            st.button(
+                "☀️  Light",
+                key="scm_theme_light_menu",
+                type="primary" if SCM_THEME == "light" else "secondary",
+                use_container_width=True,
+                on_click=set_scm_theme,
+                args=("light",),
+            )
 
-with theme_dark_col:
-    st.button(
-        "🌙 Dark",
-        key="scm_theme_dark",
-        type="primary" if SCM_THEME == "dark" else "secondary",
-        use_container_width=True,
-        on_click=set_scm_theme,
-        args=("dark",),
-    )
+            st.button(
+                "🌙  Dark",
+                key="scm_theme_dark_menu",
+                type="primary" if SCM_THEME == "dark" else "secondary",
+                use_container_width=True,
+                on_click=set_scm_theme,
+                args=("dark",),
+            )
 
 
 st.markdown(
