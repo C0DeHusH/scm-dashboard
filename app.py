@@ -609,6 +609,19 @@ st.markdown(
             white-space: nowrap;
         }
 
+        /* Model action columns: Rank / Status / Inventory / Transfer / DOI centered. */
+        .pareto-html-table .center,
+        .pareto-html-table th.center,
+        .pareto-html-table td.center {
+            text-align: center !important;
+            vertical-align: middle !important;
+        }
+
+        .pareto-html-table td.center .pareto-status {
+            margin-left: auto;
+            margin-right: auto;
+        }
+
         /* WORLD-CLASS STOCK STATUS SYSTEM */
         .pareto-status {
             display: inline-flex;
@@ -3027,7 +3040,7 @@ def ppt_add_table(slide, df, x, y, w, h, title, colors=None, font_size=7.4):
         cell.text_frame.paragraphs[0].font.size = Pt(font_size)
         cell.text_frame.paragraphs[0].font.color.rgb = ppt_rgb(colors["muted"])
         cell.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
-        cell.text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER if header != "Model" and header != "Status" else PP_ALIGN.LEFT
+        cell.text_frame.paragraphs[0].alignment = PP_ALIGN.LEFT if header == "Model" else PP_ALIGN.CENTER
 
     for r, (_, row) in enumerate(df.iterrows(), start=1):
         for c, header in enumerate(headers):
@@ -3041,7 +3054,7 @@ def ppt_add_table(slide, df, x, y, w, h, title, colors=None, font_size=7.4):
             p.font.name = "Aptos"
             p.font.size = Pt(font_size)
             p.font.color.rgb = ppt_rgb(colors["text"])
-            p.alignment = PP_ALIGN.CENTER if header not in {"Model", "Status"} else PP_ALIGN.LEFT
+            p.alignment = PP_ALIGN.LEFT if header == "Model" else PP_ALIGN.CENTER
 
             if header == "Status":
                 status_class = stock_status_style_class(str(value))
@@ -3419,17 +3432,44 @@ with tab_inventory:
 
     with trend_sync_col:
         st.markdown(
-            '<div class="data-sync-shell"><span class="data-sync-caption">Sync workbook • Export deck</span></div>',
+            '<div class="data-sync-shell"><span class="data-sync-caption">Data actions</span></div>',
             unsafe_allow_html=True,
         )
-        if st.button(
-            "Data Sync + Export",
-            type="primary",
-            width="stretch",
-            key="open_scm_data_sync_dialog",
-            help="Open the combined Data Sync and PowerPoint export workflow.",
-        ):
-            data_sync_dialog()
+        with st.popover("Data Actions ▾", width="stretch"):
+            st.markdown(
+                "<div style='font-weight:850; font-size:0.78rem; color:var(--scm-muted); margin-bottom:0.35rem;'>WORKBOOK & PRESENTATION</div>",
+                unsafe_allow_html=True,
+            )
+            if st.button(
+                "📥 Data Sync",
+                type="primary",
+                width="stretch",
+                key="open_scm_data_sync_dialog",
+                help="Open the workbook import and synchronization dialog.",
+            ):
+                data_sync_dialog()
+
+            if st.button(
+                "📊 Export Presentation",
+                width="stretch",
+                key="generate_scm_presentation",
+                help="Build the PowerPoint from the current synchronized dashboard data.",
+            ):
+                try:
+                    current_area = st.session_state.get("selected_scm_area_for_export", "All Areas")
+                    current_raw, current_ytd, current_weekly = process_excel_file(io.BytesIO(st.session_state["scm_workbook_bytes"]))
+                    with st.spinner("Building PowerPoint presentation…"):
+                        st.session_state["scm_presentation_bytes"] = build_scm_presentation(
+                            current_raw, current_ytd, current_weekly, current_area
+                        )
+                    st.session_state["scm_presentation_name"] = (
+                        f"SCM_Control_Tower_{current_area.replace(' ', '_')}_Presentation.pptx"
+                    )
+                    st.session_state.pop("scm_presentation_error", None)
+                    st.rerun()
+                except Exception as exc:
+                    st.session_state["scm_presentation_error"] = str(exc)
+                    st.rerun()
 
     import_success = st.session_state.pop("scm_import_success", None)
     if import_success:
@@ -4286,12 +4326,12 @@ with tab_inventory:
             status_class = stock_status_style_class(status_text)
             rows_html.append(
                 "<tr>"
-                f"<td class='num'>{int(row['Rank'])}</td>"
+                f"<td class='center'>{int(row['Rank'])}</td>"
                 f"<td>{html.escape(str(row['Model']))}</td>"
-                f"<td><span class='pareto-status {status_class}'>{html.escape(status_text)}</span></td>"
-                f"<td class='num'>{int(row['Inventory']):,}</td>"
-                f"<td class='num'>{int(row['Transfer']):,}</td>"
-                f"<td class='num'>{int(row['DOI']):,}</td>"
+                f"<td class='center'><span class='pareto-status {status_class}'>{html.escape(status_text)}</span></td>"
+                f"<td class='center'>{int(row['Inventory']):,}</td>"
+                f"<td class='center'>{int(row['Transfer']):,}</td>"
+                f"<td class='center'>{int(row['DOI']):,}</td>"
                 "</tr>"
             )
 
@@ -4307,8 +4347,8 @@ with tab_inventory:
             "<col style='width:14%'>"
             "</colgroup>"
             "<thead><tr>"
-            "<th class='num'>Rank</th><th>Model</th><th>Status</th>"
-            "<th class='num'>Inventory</th><th class='num'>Transfer</th><th class='num'>DOI</th>"
+            "<th class='center'>Rank</th><th>Model</th><th class='center'>Status</th>"
+            "<th class='center'>Inventory</th><th class='center'>Transfer</th><th class='center'>DOI</th>"
             "</tr></thead>"
             "<tbody>" + "".join(rows_html) + "</tbody>"
             "</table></div>"
