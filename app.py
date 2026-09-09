@@ -346,6 +346,12 @@ def set_scm_theme(theme_name):
         st.session_state["scm_theme"] = theme_name
 
 
+def toggle_scm_theme():
+    """Toggle between the dashboard Light and Dark themes."""
+    current_theme = st.session_state.get("scm_theme", "dark")
+    st.session_state["scm_theme"] = "light" if current_theme == "dark" else "dark"
+
+
 SCM_THEME = st.session_state["scm_theme"]
 SCM_IS_DARK = SCM_THEME == "dark"
 
@@ -1162,22 +1168,56 @@ st.markdown(
         }}
 
         /* -------------------------------------------------
-           CUSTOM 3-DOT THEME MENU
-           Replaces the previous visible Light / Dark buttons.
+           HEADER-INTEGRATED LIGHT / DARK THEME TOGGLE
+           Single icon button; icon changes with the active theme.
            ------------------------------------------------- */
-        .st-key-scm_theme_menu {{
+
+        /* The Streamlit container itself becomes the executive hero/header. */
+        .st-key-scm_executive_header {{
+            box-sizing: border-box;
+            width: 100%;
+            min-width: 0;
+            margin: 0.08rem 0 0.92rem 0;
+            padding: clamp(20px, 1.65vw, 28px) clamp(22px, 2.15vw, 34px);
+            border: 1px solid var(--scm-border);
+            border-left: 4px solid var(--scm-indigo);
+            border-radius: 18px;
+            background: var(--scm-hero-bg);
+            box-shadow: var(--scm-theme-shadow);
+            overflow: visible;
+        }}
+
+        .st-key-scm_executive_header > div {{
+            width: 100%;
+            min-width: 0;
+        }}
+
+        .st-key-scm_executive_header [data-testid="stHorizontalBlock"] {{
+            align-items: flex-start !important;
+        }}
+
+        /* Remove extra Streamlit vertical spacing inside the header only. */
+        .st-key-scm_executive_header [data-testid="stVerticalBlock"] {{
+            gap: 0 !important;
+        }}
+
+        /* Theme button wrapper sits at the upper-right of the header. */
+        .st-key-scm_header_theme_toggle {{
             display: flex;
             justify-content: flex-end;
             align-items: flex-start;
             width: 100%;
+            padding-top: 0.05rem;
         }}
 
-        .st-key-scm_theme_menu [data-testid="stPopover"] {{
+        .st-key-scm_header_theme_toggle [data-testid="stButton"] {{
+            width: auto !important;
             margin-left: auto !important;
         }}
 
-        .st-key-scm_theme_menu [data-testid="stPopover"] > button,
-        .st-key-scm_theme_menu button[data-testid="stBaseButton-secondary"] {{
+        /* Override the dashboard's general right-column button treatment. */
+        .st-key-scm_theme_toggle button,
+        .st-key-scm_header_theme_toggle button {{
             width: 42px !important;
             min-width: 42px !important;
             max-width: 42px !important;
@@ -1188,66 +1228,54 @@ st.markdown(
             border: 1px solid var(--scm-border) !important;
             background: var(--scm-surface) !important;
             color: var(--scm-text) !important;
-            box-shadow: 0 5px 14px rgba(15, 23, 42, 0.08) !important;
-            font-size: 1.55rem !important;
+            box-shadow: 0 5px 14px rgba(15, 23, 42, 0.10) !important;
+            font-size: 1.16rem !important;
             font-weight: 900 !important;
             line-height: 1 !important;
-            letter-spacing: 0.06em !important;
+            letter-spacing: 0 !important;
+            transition: transform 150ms ease, box-shadow 150ms ease,
+                        border-color 150ms ease, background 150ms ease !important;
         }}
 
-        .st-key-scm_theme_menu [data-testid="stPopover"] > button:hover {{
-            border-color: rgba(99, 102, 241, 0.58) !important;
+        .st-key-scm_theme_toggle button:hover,
+        .st-key-scm_header_theme_toggle button:hover {{
+            transform: translateY(-1px) !important;
+            border-color: rgba(99, 102, 241, 0.62) !important;
             background: var(--scm-hover) !important;
-            transform: translateY(-1px);
-            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12) !important;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.14) !important;
         }}
 
-        /* Theme choices inside the drop-down panel */
-        .st-key-scm_theme_light_menu button,
-        .st-key-scm_theme_dark_menu button {{
-            width: 100% !important;
-            min-height: 39px !important;
-            padding: 0.40rem 0.70rem !important;
-            border-radius: 9px !important;
-            border: 1px solid var(--scm-border) !important;
-            background: var(--scm-surface) !important;
-            color: var(--scm-text) !important;
-            box-shadow: none !important;
-            font-size: 0.76rem !important;
-            font-weight: 800 !important;
-            justify-content: flex-start !important;
+        .st-key-scm_theme_toggle button:focus,
+        .st-key-scm_header_theme_toggle button:focus {{
+            outline: none !important;
+            box-shadow:
+                0 0 0 3px rgba(99, 102, 241, 0.16),
+                0 8px 18px rgba(15, 23, 42, 0.12) !important;
         }}
 
-        .st-key-scm_theme_light_menu button:hover,
-        .st-key-scm_theme_dark_menu button:hover {{
-            background: var(--scm-hover) !important;
-            border-color: rgba(99, 102, 241, 0.48) !important;
+        /* Keep the header copy vertically clean and responsive. */
+        .st-key-scm_executive_header .hero-copy {{
+            display: block;
+            width: 100%;
+            min-width: 0;
+            max-width: 100%;
         }}
 
-        .st-key-scm_theme_light_menu button[kind="primary"],
-        .st-key-scm_theme_dark_menu button[kind="primary"] {{
-            background: linear-gradient(
-                135deg,
-                rgba(79,70,229,0.98),
-                rgba(37,99,235,0.96)
-            ) !important;
-            border-color: rgba(99, 102, 241, 0.72) !important;
-            color: #ffffff !important;
-        }}
+        @media (max-width: 760px) {{
+            .st-key-scm_executive_header {{
+                padding: 18px 18px 20px 20px;
+            }}
 
-        .scm-theme-menu-title {{
-            color: var(--scm-text);
-            font-size: 0.78rem;
-            font-weight: 900;
-            line-height: 1.25;
-            margin: 0 0 0.10rem 0;
-        }}
-
-        .scm-theme-menu-caption {{
-            color: var(--scm-muted);
-            font-size: 0.66rem;
-            line-height: 1.35;
-            margin: 0 0 0.60rem 0;
+            .st-key-scm_theme_toggle button,
+            .st-key-scm_header_theme_toggle button {{
+                width: 38px !important;
+                min-width: 38px !important;
+                max-width: 38px !important;
+                height: 38px !important;
+                min-height: 38px !important;
+                border-radius: 10px !important;
+                font-size: 1.02rem !important;
+            }}
         }}
     </style>
     """,
@@ -1255,64 +1283,50 @@ st.markdown(
 )
 
 # ---------------------------------------------------------
-# TOP-RIGHT 3-DOT APPEARANCE MENU
+# EXECUTIVE HEADER WITH INTEGRATED THEME TOGGLE
 # ---------------------------------------------------------
-theme_menu_space, theme_menu_col = st.columns(
-    [24.0, 1.0],
-    gap="small",
+theme_toggle_icon = "🌙" if SCM_IS_DARK else "☀️"
+theme_toggle_help = (
+    "Dark mode is active • Click to switch to Light mode"
+    if SCM_IS_DARK
+    else "Light mode is active • Click to switch to Dark mode"
 )
 
-with theme_menu_col:
-    with st.container(key="scm_theme_menu"):
-        with st.popover("⋮"):
-            st.markdown(
-                """
-                <div class="scm-theme-menu-title">Appearance</div>
-                <div class="scm-theme-menu-caption">
-                    Choose the dashboard display theme.
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+with st.container(key="scm_executive_header"):
+    header_copy_col, header_theme_col = st.columns(
+        [11.5, 0.5],
+        gap="small",
+        vertical_alignment="top",
+    )
 
-            st.button(
-                "☀️  Light",
-                key="scm_theme_light_menu",
-                type="primary" if SCM_THEME == "light" else "secondary",
-                use_container_width=True,
-                on_click=set_scm_theme,
-                args=("light",),
-            )
-
-            st.button(
-                "🌙  Dark",
-                key="scm_theme_dark_menu",
-                type="primary" if SCM_THEME == "dark" else "secondary",
-                use_container_width=True,
-                on_click=set_scm_theme,
-                args=("dark",),
-            )
-
-
-st.markdown(
-    """
-    <div class="hero-shell">
-        <div class="hero-grid">
+    with header_copy_col:
+        st.markdown(
+            """
             <div class="hero-copy">
                 <div class="hero-kicker">Supply Chain Management • Executive Analytics</div>
                 <div class="hero-title">MUTI MC SCM Executive Control Tower</div>
                 <div class="hero-subtitle">
-                    Inventory visibility, Pareto risk prioritization, stockout trends, Days of Inventory, and branch-level action monitoring.
+                    Inventory visibility, Pareto risk prioritization, stockout trends,
+                    Days of Inventory, and branch-level action monitoring.
                 </div>
                 <a href="https://scmdrp.streamlit.app/" target="_blank" class="drp-action-btn">
                     Launch Delivery Requirements Plan (DRP) ↗
                 </a>
             </div>
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with header_theme_col:
+        with st.container(key="scm_header_theme_toggle"):
+            st.button(
+                theme_toggle_icon,
+                key="scm_theme_toggle",
+                help=theme_toggle_help,
+                use_container_width=False,
+                on_click=toggle_scm_theme,
+            )
+
 
 
 # =========================================================
