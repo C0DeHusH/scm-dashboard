@@ -1029,97 +1029,6 @@ st.markdown(
             border-top: 1px solid var(--scm-border);
             margin: 1.10rem 0;
         }
-        /* =====================================================
-           2026 EXECUTIVE POLISH
-           Modern visual hierarchy without changing KPI logic.
-           ===================================================== */
-        .stApp {
-            background-image:
-                radial-gradient(circle at 6% 0%, rgba(99,102,241,0.08), transparent 30%),
-                radial-gradient(circle at 94% 8%, rgba(14,165,233,0.06), transparent 28%);
-        }
-
-        .st-key-scm_executive_header {
-            position: relative;
-            isolation: isolate;
-            background:
-                linear-gradient(135deg, rgba(15,23,42,0.98), rgba(30,41,59,0.96) 55%, rgba(49,46,129,0.94)) !important;
-            border: 1px solid rgba(129,140,248,0.28) !important;
-            border-left: 4px solid #818cf8 !important;
-            box-shadow: 0 18px 46px rgba(15,23,42,0.22) !important;
-        }
-
-        .st-key-scm_executive_header::after {
-            content: "";
-            position: absolute;
-            width: 220px;
-            height: 220px;
-            right: -70px;
-            top: -120px;
-            border-radius: 50%;
-            background: rgba(99,102,241,0.12);
-            filter: blur(5px);
-            z-index: -1;
-        }
-
-        .st-key-scm_executive_header .hero-title {
-            text-shadow: 0 2px 18px rgba(0,0,0,0.20);
-        }
-
-        .metric-card, .metric-card-base, div[data-testid="stVerticalBlockBorderWrapper"] {
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
-        }
-
-        .metric-card:hover, .metric-card-base:hover, div[data-testid="stVerticalBlockBorderWrapper"]:has(.js-plotly-plot):hover {
-            transform: translateY(-2px);
-            border-color: rgba(99,102,241,0.30) !important;
-            box-shadow: 0 12px 30px rgba(15,23,42,0.10) !important;
-        }
-
-        button[data-baseweb="tab"] {
-            font-weight: 800 !important;
-            letter-spacing: 0.01em !important;
-        }
-
-        button[data-baseweb="tab"][aria-selected="true"] {
-            border-bottom-width: 3px !important;
-        }
-
-        .section-heading .title {
-            font-size: clamp(1.02rem, 1.4vw, 1.20rem);
-        }
-
-        .data-sync-shell + div button,
-        .st-key-open_scm_data_sync_dialog button {
-            border-radius: 11px !important;
-            font-weight: 850 !important;
-            box-shadow: 0 8px 18px rgba(79,70,229,0.18) !important;
-        }
-
-        [data-testid="stFileUploader"] section {
-            transition: border-color 160ms ease, background 160ms ease;
-        }
-
-        [data-testid="stFileUploader"] section:hover {
-            border-color: rgba(99,102,241,0.68) !important;
-            background: rgba(99,102,241,0.055) !important;
-        }
-
-        @media (max-width: 900px) {
-            .trend-heading-inline {
-                min-height: 46px;
-            }
-            .section-heading {
-                grid-template-columns: auto minmax(0, 1fr);
-            }
-            .section-heading .subtitle {
-                grid-column: 2;
-                text-align: left;
-            }
-        }
-
     </style><br>
     """,
     unsafe_allow_html=True,
@@ -1571,7 +1480,7 @@ with st.container(key="scm_executive_header"):
                 theme_toggle_icon,
                 key="scm_theme_toggle",
                 help=theme_toggle_help,
-                width="content",
+                use_container_width=False,
                 on_click=toggle_scm_theme,
             )
 
@@ -1898,7 +1807,7 @@ def data_sync_dialog():
         do_import = st.button(
             "Validate & Sync",
             type="primary",
-            width="stretch",
+            use_container_width=True,
             key="scm_data_sync_confirm_button",
         )
     with info_col:
@@ -2499,7 +2408,7 @@ with tab_inventory:
         if st.button(
             "Data Sync",
             type="primary",
-            width="stretch",
+            use_container_width=True,
             key="open_scm_data_sync_dialog",
             help="Validate and synchronize the latest SCM Excel workbook.",
         ):
@@ -2624,7 +2533,7 @@ with tab_inventory:
                 is_percentage=False,
                 fill=True,
                 ),
-                width="stretch",
+                use_container_width=True,
             )
 
     with row1_right:
@@ -2640,7 +2549,7 @@ with tab_inventory:
                 is_percentage=False,
                 fill=True,
                 ),
-                width="stretch",
+                use_container_width=True,
             )
 
     row2_left, row2_right = st.columns(2, gap="small")
@@ -2656,7 +2565,7 @@ with tab_inventory:
                 is_weekly=is_weekly,
                 is_percentage=True,
                 ),
-                width="stretch",
+                use_container_width=True,
             )
 
     with row2_right:
@@ -2671,7 +2580,7 @@ with tab_inventory:
                 is_weekly=is_weekly,
                 is_percentage=True,
                 ),
-                width="stretch",
+                use_container_width=True,
             )
 
     row3_left, row3_right = st.columns(2, gap="small")
@@ -2687,7 +2596,7 @@ with tab_inventory:
                 is_weekly=is_weekly,
                 is_percentage=True,
                 ),
-                width="stretch",
+                use_container_width=True,
             )
 
     with row3_right:
@@ -2703,7 +2612,7 @@ with tab_inventory:
                 is_percentage=True,
                 fill=True,
                 ),
-                width="stretch",
+                use_container_width=True,
             )
 
     st.markdown("---")
@@ -2902,7 +2811,7 @@ with tab_inventory:
             )
 
             st.plotly_chart(
-                fig_bar, width="stretch", config=PLOTLY_BAR_CONFIG
+                fig_bar, use_container_width=True, config=PLOTLY_BAR_CONFIG
             )
 
         with class_a_col:
@@ -2947,7 +2856,7 @@ with tab_inventory:
             )
 
             st.plotly_chart(
-                fig_class_a, width="stretch", config=PLOTLY_BAR_CONFIG
+                fig_class_a, use_container_width=True, config=PLOTLY_BAR_CONFIG
             )
 
 
@@ -3123,7 +3032,7 @@ with tab_inventory:
                 )
 
                 st.plotly_chart(
-                    fig_high_class_a, width="stretch", config=PLOTLY_BAR_CONFIG
+                    fig_high_class_a, use_container_width=True, config=PLOTLY_BAR_CONFIG
                 )
 
         with zero_rank_col:
@@ -3186,7 +3095,7 @@ with tab_inventory:
                 )
 
                 st.plotly_chart(
-                    fig_zero_class_a, width="stretch", config=PLOTLY_BAR_CONFIG
+                    fig_zero_class_a, use_container_width=True, config=PLOTLY_BAR_CONFIG
                 )
                 st.caption(
                     "Zero-stockout leaders are ranked by Class A stock-status coverage count; "
