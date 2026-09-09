@@ -325,7 +325,7 @@ def initialize_persistent_workbook():
 # =========================================================
 
 st.set_page_config(
-    page_title="MUTI MC SCM Executive Control Tower",
+    page_title="SCM Executive Control Tower",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -1029,6 +1029,97 @@ st.markdown(
             border-top: 1px solid var(--scm-border);
             margin: 1.10rem 0;
         }
+        /* =====================================================
+           2026 EXECUTIVE POLISH
+           Modern visual hierarchy without changing KPI logic.
+           ===================================================== */
+        .stApp {
+            background-image:
+                radial-gradient(circle at 6% 0%, rgba(99,102,241,0.08), transparent 30%),
+                radial-gradient(circle at 94% 8%, rgba(14,165,233,0.06), transparent 28%);
+        }
+
+        .st-key-scm_executive_header {
+            position: relative;
+            isolation: isolate;
+            background:
+                linear-gradient(135deg, rgba(15,23,42,0.98), rgba(30,41,59,0.96) 55%, rgba(49,46,129,0.94)) !important;
+            border: 1px solid rgba(129,140,248,0.28) !important;
+            border-left: 4px solid #818cf8 !important;
+            box-shadow: 0 18px 46px rgba(15,23,42,0.22) !important;
+        }
+
+        .st-key-scm_executive_header::after {
+            content: "";
+            position: absolute;
+            width: 220px;
+            height: 220px;
+            right: -70px;
+            top: -120px;
+            border-radius: 50%;
+            background: rgba(99,102,241,0.12);
+            filter: blur(5px);
+            z-index: -1;
+        }
+
+        .st-key-scm_executive_header .hero-title {
+            text-shadow: 0 2px 18px rgba(0,0,0,0.20);
+        }
+
+        .metric-card, .metric-card-base, div[data-testid="stVerticalBlockBorderWrapper"] {
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+        }
+
+        .metric-card:hover, .metric-card-base:hover, div[data-testid="stVerticalBlockBorderWrapper"]:has(.js-plotly-plot):hover {
+            transform: translateY(-2px);
+            border-color: rgba(99,102,241,0.30) !important;
+            box-shadow: 0 12px 30px rgba(15,23,42,0.10) !important;
+        }
+
+        button[data-baseweb="tab"] {
+            font-weight: 800 !important;
+            letter-spacing: 0.01em !important;
+        }
+
+        button[data-baseweb="tab"][aria-selected="true"] {
+            border-bottom-width: 3px !important;
+        }
+
+        .section-heading .title {
+            font-size: clamp(1.02rem, 1.4vw, 1.20rem);
+        }
+
+        .data-sync-shell + div button,
+        .st-key-open_scm_data_sync_dialog button {
+            border-radius: 11px !important;
+            font-weight: 850 !important;
+            box-shadow: 0 8px 18px rgba(79,70,229,0.18) !important;
+        }
+
+        [data-testid="stFileUploader"] section {
+            transition: border-color 160ms ease, background 160ms ease;
+        }
+
+        [data-testid="stFileUploader"] section:hover {
+            border-color: rgba(99,102,241,0.68) !important;
+            background: rgba(99,102,241,0.055) !important;
+        }
+
+        @media (max-width: 900px) {
+            .trend-heading-inline {
+                min-height: 46px;
+            }
+            .section-heading {
+                grid-template-columns: auto minmax(0, 1fr);
+            }
+            .section-heading .subtitle {
+                grid-column: 2;
+                text-align: left;
+            }
+        }
+
     </style><br>
     """,
     unsafe_allow_html=True,
@@ -1379,103 +1470,6 @@ st.markdown(
             min-width: 0;
             max-width: 100%;
         }}
-
-        /* =================================================
-           ADDITIONAL EXECUTIVE POLISH
-           Presentation-only styling; no KPI/data logic changes.
-           ================================================= */
-        .stApp {
-            font-family: Inter, ui-sans-serif, system-ui, -apple-system,
-                         BlinkMacSystemFont, "Segoe UI", sans-serif !important;
-        }
-
-        /* Soft executive canvas with subtle depth. */
-        [data-testid="stAppViewContainer"] {
-            background:
-                radial-gradient(circle at 8% 0%, rgba(99,102,241,0.085), transparent 28%),
-                radial-gradient(circle at 92% 2%, rgba(14,165,233,0.065), transparent 24%),
-                var(--scm-page-bg) !important;
-        }
-
-        /* Cleaner tab rail. */
-        div[data-testid="stTabs"] [data-baseweb="tab-list"] {
-            gap: 6px !important;
-            padding: 5px !important;
-            margin: 0.15rem 0 0.85rem 0 !important;
-            border: 1px solid var(--scm-border) !important;
-            border-radius: 14px !important;
-            background: var(--scm-card-bg) !important;
-            box-shadow: 0 5px 16px rgba(15,23,42,0.045) !important;
-        }
-
-        div[data-testid="stTabs"] button[data-baseweb="tab"] {
-            min-height: 40px !important;
-            padding: 0.45rem 1rem !important;
-            border-radius: 10px !important;
-            font-weight: 800 !important;
-            font-size: 0.78rem !important;
-            letter-spacing: 0.015em !important;
-            transition: all 160ms ease !important;
-        }
-
-        div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
-            background: linear-gradient(135deg, rgba(99,102,241,0.18), rgba(37,99,235,0.10)) !important;
-            box-shadow: inset 0 0 0 1px rgba(99,102,241,0.28), 0 4px 12px rgba(99,102,241,0.08) !important;
-        }
-
-        /* More refined form controls. */
-        div[data-baseweb="select"] > div,
-        div[data-baseweb="input"] > div,
-        div[data-baseweb="textarea"] > div {
-            min-height: 40px !important;
-            border-radius: 10px !important;
-            transition: border-color 150ms ease, box-shadow 150ms ease !important;
-        }
-
-        div[data-baseweb="select"] > div:focus-within,
-        div[data-baseweb="input"] > div:focus-within,
-        div[data-baseweb="textarea"] > div:focus-within {
-            border-color: rgba(99,102,241,0.65) !important;
-            box-shadow: 0 0 0 3px rgba(99,102,241,0.10) !important;
-        }
-
-        /* Add consistent depth to bordered content panels. */
-        div[data-testid="stVerticalBlockBorderWrapper"] {
-            backdrop-filter: blur(8px);
-            transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
-        }
-
-        div[data-testid="stVerticalBlockBorderWrapper"]:hover {
-            transform: translateY(-1px);
-            border-color: rgba(99,102,241,0.24) !important;
-            box-shadow: 0 10px 26px rgba(15,23,42,0.075) !important;
-        }
-
-        /* Better visual hierarchy for Plotly containers. */
-        div[data-testid="stPlotlyChart"] {
-            padding: 2px 0;
-        }
-
-        /* Compact status metadata row. */
-        .status-strip {
-            backdrop-filter: blur(8px);
-        }
-
-        .info-chip {
-            background: rgba(99,102,241,0.035);
-        }
-
-        /* Hide any app-level developer chrome Streamlit may expose inside the
-           app viewport. The Community Cloud "Manage app" surface is outside
-           this document and cannot be controlled by app.py. */
-        [data-testid="stDecoration"],
-        [data-testid="viewerBadge"],
-        [data-testid="stToolbar"] {
-            display: none !important;
-            visibility: hidden !important;
-            height: 0 !important;
-            min-height: 0 !important;
-        }
 
         @media (max-width: 760px) {{
             .st-key-scm_executive_header {{
