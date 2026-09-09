@@ -365,6 +365,22 @@ PLOTLY_HOVER_BORDER = (
     else "rgba(15,23,42,0.16)"
 )
 
+# Executive chart tokens — presentation only; no KPI/data logic changes.
+PLOTLY_CHART_TEXT = "#f8fafc" if SCM_IS_DARK else "#0f172a"
+PLOTLY_CHART_MUTED = "#94a3b8" if SCM_IS_DARK else "#64748b"
+PLOTLY_CHART_GRID = (
+    "rgba(148,163,184,0.12)" if SCM_IS_DARK else "rgba(15,23,42,0.08)"
+)
+PLOTLY_CHART_AXIS = (
+    "rgba(148,163,184,0.20)" if SCM_IS_DARK else "rgba(15,23,42,0.14)"
+)
+PLOTLY_BAR_CONFIG = {
+    "displayModeBar": False,
+    "displaylogo": False,
+    "scrollZoom": False,
+    "responsive": True,
+}
+
 # =========================================================
 # 2. EXECUTIVE UI / THEME
 # =========================================================
@@ -568,23 +584,106 @@ st.markdown(
             white-space: nowrap;
         }
 
+        /* WORLD-CLASS STOCK STATUS SYSTEM */
         .pareto-status {
             display: inline-flex;
             align-items: center;
+            gap: 6px;
             max-width: 100%;
-            padding: 3px 7px;
+            min-height: 25px;
+            padding: 4px 9px 4px 7px;
             border-radius: 999px;
             border: 1px solid rgba(148, 163, 184, 0.20);
-            font-size: 0.67rem;
-            font-weight: 800;
-            line-height: 1.2;
-            white-space: normal;
+            background: rgba(148, 163, 184, 0.055);
+            color: var(--scm-muted);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
+            font-size: 0.64rem;
+            font-weight: 900;
+            line-height: 1.1;
+            letter-spacing: 0.045em;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .pareto-status::before {
+            content: "";
+            width: 7px;
+            height: 7px;
+            flex: 0 0 7px;
+            border-radius: 50%;
+            background: #94a3b8;
+            box-shadow: 0 0 0 3px rgba(148,163,184,0.10);
         }
 
         .pareto-status.stockout {
-            color: #f87171;
-            background: rgba(248, 113, 113, 0.08);
-            border-color: rgba(248, 113, 113, 0.22);
+            color: #fb7185;
+            background: rgba(244, 63, 94, 0.10);
+            border-color: rgba(244, 63, 94, 0.30);
+        }
+        .pareto-status.stockout::before {
+            background: #f43f5e;
+            box-shadow: 0 0 0 3px rgba(244,63,94,0.14), 0 0 10px rgba(244,63,94,0.30);
+        }
+
+        .pareto-status.critical {
+            color: #fb923c;
+            background: rgba(249, 115, 22, 0.10);
+            border-color: rgba(249, 115, 22, 0.30);
+        }
+        .pareto-status.critical::before {
+            background: #f97316;
+            box-shadow: 0 0 0 3px rgba(249,115,22,0.14);
+        }
+
+        .pareto-status.low {
+            color: #fbbf24;
+            background: rgba(245, 158, 11, 0.10);
+            border-color: rgba(245, 158, 11, 0.30);
+        }
+        .pareto-status.low::before {
+            background: #f59e0b;
+            box-shadow: 0 0 0 3px rgba(245,158,11,0.14);
+        }
+
+        .pareto-status.ok {
+            color: #34d399;
+            background: rgba(16, 185, 129, 0.10);
+            border-color: rgba(16, 185, 129, 0.30);
+        }
+        .pareto-status.ok::before {
+            background: #10b981;
+            box-shadow: 0 0 0 3px rgba(16,185,129,0.14);
+        }
+
+        .pareto-status.overstock {
+            color: #38bdf8;
+            background: rgba(14, 165, 233, 0.10);
+            border-color: rgba(14, 165, 233, 0.30);
+        }
+        .pareto-status.overstock::before {
+            background: #0ea5e9;
+            box-shadow: 0 0 0 3px rgba(14,165,233,0.14);
+        }
+
+        .stock-status-legend {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 7px;
+            margin: 0.15rem 0 0.78rem 0;
+            padding: 9px 11px;
+            border: 1px solid var(--scm-border);
+            border-radius: 12px;
+            background: rgba(148, 163, 184, 0.022);
+        }
+
+        .stock-status-legend-label {
+            margin-right: 3px;
+            color: var(--scm-muted);
+            font-size: 0.62rem;
+            font-weight: 900;
+            letter-spacing: 0.075em;
+            text-transform: uppercase;
         }
 
         /* WORLD-CLASS EXECUTIVE HERO — ONE FLAT SURFACE */
@@ -1143,8 +1242,7 @@ st.markdown(
 
         .status-pill,
         .info-chip,
-        .pareto-count,
-        .pareto-status {{
+        .pareto-count {{
             border-color: var(--scm-border) !important;
         }}
 
@@ -1253,6 +1351,27 @@ st.markdown(
                 0 8px 18px rgba(15, 23, 42, 0.12) !important;
         }}
 
+        /* Optional company logo in the executive header. */
+        .st-key-scm_header_logo {{
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 84px;
+            padding-right: 0.35rem;
+        }}
+
+        .st-key-scm_header_logo [data-testid="stImage"] {{
+            margin: 0 !important;
+        }}
+
+        .st-key-scm_header_logo img {{
+            width: auto !important;
+            max-width: 92px !important;
+            max-height: 76px !important;
+            object-fit: contain !important;
+            filter: drop-shadow(0 6px 14px rgba(2, 6, 23, 0.18));
+        }}
+
         /* Keep the header copy vertically clean and responsive. */
         .st-key-scm_executive_header .hero-copy {{
             display: block;
@@ -1264,6 +1383,15 @@ st.markdown(
         @media (max-width: 760px) {{
             .st-key-scm_executive_header {{
                 padding: 18px 18px 20px 20px;
+            }}
+
+            .st-key-scm_header_logo {{
+                min-height: 62px;
+            }}
+
+            .st-key-scm_header_logo img {{
+                max-width: 72px !important;
+                max-height: 58px !important;
             }}
 
             .st-key-scm_theme_toggle button,
@@ -1283,8 +1411,27 @@ st.markdown(
 )
 
 # ---------------------------------------------------------
-# EXECUTIVE HEADER WITH INTEGRATED THEME TOGGLE
+# EXECUTIVE HEADER WITH OPTIONAL COMPANY LOGO + THEME TOGGLE
 # ---------------------------------------------------------
+# HOW TO ADD YOUR LOGO:
+# 1) Create an `assets` folder beside this Python file.
+# 2) Save your transparent PNG as: assets/company_logo.png
+# 3) Or set Streamlit secret COMPANY_LOGO / environment variable SCM_COMPANY_LOGO
+#    to another local path or an https:// image URL.
+COMPANY_LOGO_SOURCE = str(
+    _secret("COMPANY_LOGO", "")
+    or os.getenv("SCM_COMPANY_LOGO", "assets/company_logo.png")
+    or ""
+).strip()
+
+company_logo_available = bool(
+    COMPANY_LOGO_SOURCE
+    and (
+        COMPANY_LOGO_SOURCE.lower().startswith(("http://", "https://"))
+        or os.path.exists(COMPANY_LOGO_SOURCE)
+    )
+)
+
 theme_toggle_icon = "🌙" if SCM_IS_DARK else "☀️"
 theme_toggle_help = (
     "Dark mode is active • Click to switch to Light mode"
@@ -1293,11 +1440,21 @@ theme_toggle_help = (
 )
 
 with st.container(key="scm_executive_header"):
-    header_copy_col, header_theme_col = st.columns(
-        [11.5, 0.5],
-        gap="small",
-        vertical_alignment="top",
-    )
+    if company_logo_available:
+        header_logo_col, header_copy_col, header_theme_col = st.columns(
+            [1.15, 10.35, 0.5],
+            gap="small",
+            vertical_alignment="top",
+        )
+        with header_logo_col:
+            with st.container(key="scm_header_logo"):
+                st.image(COMPANY_LOGO_SOURCE, width=92)
+    else:
+        header_copy_col, header_theme_col = st.columns(
+            [11.5, 0.5],
+            gap="small",
+            vertical_alignment="top",
+        )
 
     with header_copy_col:
         st.markdown(
@@ -1702,6 +1859,143 @@ def section_heading(title, subtitle=""):
         """,
         unsafe_allow_html=True,
     )
+
+
+def stock_status_style_class(status_value):
+    """Map raw workbook status text to presentation-only CSS classes."""
+    normalized = str(status_value or "").strip().casefold().replace("_", " ")
+
+    if normalized in {"stockout", "stock out", "out of stock", "oos"}:
+        return "stockout"
+    if "critical" in normalized:
+        return "critical"
+    if normalized in {"low", "low stock", "below min", "below minimum"}:
+        return "low"
+    if normalized in {"ok", "normal", "healthy", "available", "in stock", "instock"}:
+        return "ok"
+    if normalized in {"overstock", "over stock", "excess", "excess stock"}:
+        return "overstock"
+    return "neutral"
+
+
+def render_stock_status_legend(df):
+    """Render only the stock statuses actually present in the selected scope."""
+    if df.empty or "stock_status" not in df.columns:
+        return
+
+    observed = []
+    seen = set()
+    for value in df["stock_status"].fillna("").astype(str):
+        label = value.strip()
+        key = label.casefold()
+        if not label or key in seen:
+            continue
+        seen.add(key)
+        observed.append(label)
+
+    if not observed:
+        return
+
+    chips = []
+    for label in observed:
+        css_class = stock_status_style_class(label)
+        chips.append(
+            f"<span class='pareto-status {css_class}'>{html.escape(label)}</span>"
+        )
+
+    st.markdown(
+        "<div class='stock-status-legend'>"
+        "<span class='stock-status-legend-label'>Stock Status</span>"
+        + "".join(chips)
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def apply_executive_bar_style(
+    fig,
+    *,
+    accent_color,
+    value_axis_title,
+    value_max,
+    category_order,
+    orientation="v",
+    percent=True,
+    height=425,
+    right_margin=28,
+):
+    """Apply one consistent executive visual system to bar charts."""
+    fig.update_traces(
+        marker=dict(
+            color=accent_color,
+            line=dict(color=accent_color, width=0),
+        ),
+        opacity=0.96,
+        textfont=dict(size=12, color=PLOTLY_CHART_TEXT),
+        cliponaxis=False,
+    )
+
+    value_axis = dict(
+        title=dict(text=value_axis_title, font=dict(size=11, color=PLOTLY_CHART_MUTED)),
+        range=[0, value_max],
+        gridcolor=PLOTLY_CHART_GRID,
+        zeroline=False,
+        showline=False,
+        tickfont=dict(size=10, color=PLOTLY_CHART_MUTED),
+        automargin=True,
+    )
+    if percent:
+        value_axis["ticksuffix"] = "%"
+
+    category_axis = dict(
+        title="",
+        type="category",
+        categoryorder="array",
+        categoryarray=category_order,
+        showgrid=False,
+        showline=True,
+        linecolor=PLOTLY_CHART_AXIS,
+        tickfont=dict(size=10, color=PLOTLY_CHART_MUTED),
+        automargin=True,
+    )
+
+    if orientation == "h":
+        category_axis["autorange"] = "reversed"
+        xaxis = value_axis
+        yaxis = category_axis
+    else:
+        category_axis["tickangle"] = 0
+        xaxis = category_axis
+        yaxis = value_axis
+
+    fig.update_layout(
+        template=PLOTLY_TEMPLATE,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        height=height,
+        margin=dict(t=76, b=52, l=42 if orientation == "v" else 20, r=right_margin),
+        showlegend=False,
+        bargap=0.34 if orientation == "v" else 0.30,
+        hovermode="closest",
+        dragmode=False,
+        font=dict(color=PLOTLY_CHART_TEXT),
+        title=dict(
+            x=0.02,
+            xanchor="left",
+            y=0.97,
+            yanchor="top",
+            font=dict(size=16, color=PLOTLY_CHART_TEXT),
+        ),
+        hoverlabel=dict(
+            bgcolor=PLOTLY_HOVER_BG,
+            bordercolor=PLOTLY_HOVER_BORDER,
+            font=dict(color=PLOTLY_HOVER_TEXT, size=11),
+        ),
+        uniformtext=dict(minsize=9, mode="hide"),
+        xaxis=xaxis,
+        yaxis=yaxis,
+    )
+    return fig
 
 
 def prepare_chart_series(df, y_col):
@@ -2489,12 +2783,8 @@ with tab_inventory:
             )
 
             fig_bar.update_traces(
-                marker_color="#6366f1",
-                marker_line=dict(width=0),
-                opacity=0.92,
-                texttemplate="%{text:.0f}%",
+                texttemplate="<b>%{text:.0f}%</b>",
                 textposition="outside",
-                cliponaxis=False,
                 hovertemplate=(
                     "<b>%{x}</b><br>"
                     "Average Stock Out Rate: <b>%{y:.0f}%</b>"
@@ -2502,41 +2792,27 @@ with tab_inventory:
                 ),
             )
 
-            avg_bar_max = area_rates_df["Average Stock Out Rate"].max()
-            fig_bar.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
+            avg_bar_max = float(area_rates_df["Average Stock Out Rate"].max())
+            apply_executive_bar_style(
+                fig_bar,
+                accent_color="#6366f1",
+                value_axis_title="Stockout rate",
+                value_max=max(10, avg_bar_max * 1.24),
+                category_order=area_order,
+                orientation="v",
+                percent=True,
                 height=425,
-                margin=dict(t=62, b=58, l=44, r=20),
-                showlegend=False,
-                bargap=0.28,
-                title=dict(x=0.02, xanchor="left", font=dict(size=16)),
-                hoverlabel=dict(
-                    bgcolor=PLOTLY_HOVER_BG,
-                    bordercolor=PLOTLY_HOVER_BORDER,
-                    font=dict(color=PLOTLY_HOVER_TEXT, size=11),
-                ),
-                xaxis=dict(
-                    title="",
-                    type="category",
-                    categoryorder="array",
-                    categoryarray=area_order,
-                    showgrid=False,
-                    tickangle=0,
-                    automargin=True,
-                    linecolor="rgba(148,163,184,0.18)",
-                ),
-                yaxis=dict(
-                    title="Stockout Rate",
-                    ticksuffix="%",
-                    range=[0, max(10, avg_bar_max * 1.24)],
-                    gridcolor="rgba(148,163,184,0.14)",
-                    zeroline=False,
-                    automargin=True,
-                ),
+            )
+            fig_bar.update_layout(
+                title_text=(
+                    "Average Stock Out Rate per Area"
+                    "<br><span style='font-size:10px;color:#94a3b8'>NETWORK RISK COMPARISON</span>"
+                )
             )
 
-            st.plotly_chart(fig_bar, use_container_width=True)
+            st.plotly_chart(
+                fig_bar, use_container_width=True, config=PLOTLY_BAR_CONFIG
+            )
 
         with class_a_col:
             fig_class_a = px.bar(
@@ -2550,12 +2826,8 @@ with tab_inventory:
             )
 
             fig_class_a.update_traces(
-                marker_color="#f43f5e",
-                marker_line=dict(width=0),
-                opacity=0.92,
-                texttemplate="%{text:.0f}%",
+                texttemplate="<b>%{text:.0f}%</b>",
                 textposition="outside",
-                cliponaxis=False,
                 hovertemplate=(
                     "<b>%{x}</b><br>"
                     "Class A Stock Out Rate: <b>%{y:.0f}%</b><br>"
@@ -2565,41 +2837,27 @@ with tab_inventory:
                 ),
             )
 
-            class_a_bar_max = area_rates_df["Class A Stock Out Rate"].max()
-            fig_class_a.update_layout(
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
+            class_a_bar_max = float(area_rates_df["Class A Stock Out Rate"].max())
+            apply_executive_bar_style(
+                fig_class_a,
+                accent_color="#f43f5e",
+                value_axis_title="Class A stockout rate",
+                value_max=max(10, class_a_bar_max * 1.24),
+                category_order=area_order,
+                orientation="v",
+                percent=True,
                 height=425,
-                margin=dict(t=62, b=58, l=44, r=20),
-                showlegend=False,
-                bargap=0.28,
-                title=dict(x=0.02, xanchor="left", font=dict(size=16)),
-                hoverlabel=dict(
-                    bgcolor=PLOTLY_HOVER_BG,
-                    bordercolor=PLOTLY_HOVER_BORDER,
-                    font=dict(color=PLOTLY_HOVER_TEXT, size=11),
-                ),
-                xaxis=dict(
-                    title="",
-                    type="category",
-                    categoryorder="array",
-                    categoryarray=area_order,
-                    showgrid=False,
-                    tickangle=0,
-                    automargin=True,
-                    linecolor="rgba(148,163,184,0.18)",
-                ),
-                yaxis=dict(
-                    title="Class A Stockout Rate",
-                    ticksuffix="%",
-                    range=[0, max(10, class_a_bar_max * 1.24)],
-                    gridcolor="rgba(148,163,184,0.14)",
-                    zeroline=False,
-                    automargin=True,
-                ),
+            )
+            fig_class_a.update_layout(
+                title_text=(
+                    "Class A Stock Out Rate per Area"
+                    "<br><span style='font-size:10px;color:#94a3b8'>HIGHEST-PRIORITY PARETO RISK</span>"
+                )
             )
 
-            st.plotly_chart(fig_class_a, use_container_width=True)
+            st.plotly_chart(
+                fig_class_a, use_container_width=True, config=PLOTLY_BAR_CONFIG
+            )
 
 
     # =========================================================
@@ -2743,12 +3001,8 @@ with tab_inventory:
                 )
 
                 fig_high_class_a.update_traces(
-                    marker_color="#f43f5e",
-                    marker_line=dict(width=0),
-                    opacity=0.94,
-                    texttemplate="%{text:.0f}%",
+                    texttemplate="<b>%{text:.0f}%</b>",
                     textposition="outside",
-                    cliponaxis=False,
                     hovertemplate=(
                         "<b>%{customdata[1]}</b><br>"
                         "Area: <b>%{customdata[0]}</b><br>"
@@ -2759,39 +3013,27 @@ with tab_inventory:
                     ),
                 )
 
+                apply_executive_bar_style(
+                    fig_high_class_a,
+                    accent_color="#f43f5e",
+                    value_axis_title="Class A stockout rate",
+                    value_max=min(105, max(10, high_rate_max * 1.18)),
+                    category_order=high_order,
+                    orientation="h",
+                    percent=True,
+                    height=max(410, 44 * len(high_class_a_branches) + 130),
+                    right_margin=54,
+                )
                 fig_high_class_a.update_layout(
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    height=max(410, 42 * len(high_class_a_branches) + 120),
-                    margin=dict(t=68, b=46, l=24, r=46),
-                    showlegend=False,
-                    bargap=0.28,
-                    title=dict(x=0.02, xanchor="left", font=dict(size=16)),
-                    hoverlabel=dict(
-                        bgcolor=PLOTLY_HOVER_BG,
-                        bordercolor=PLOTLY_HOVER_BORDER,
-                        font=dict(color=PLOTLY_HOVER_TEXT, size=11),
-                    ),
-                    xaxis=dict(
-                        title="Class A Stockout Rate",
-                        ticksuffix="%",
-                        range=[0, min(105, max(10, high_rate_max * 1.18))],
-                        gridcolor="rgba(148,163,184,0.14)",
-                        zeroline=False,
-                        automargin=True,
-                    ),
-                    yaxis=dict(
-                        title="",
-                        type="category",
-                        categoryorder="array",
-                        categoryarray=high_order,
-                        autorange="reversed",
-                        showgrid=False,
-                        automargin=True,
-                    ),
+                    title_text=(
+                        f"Top {len(high_class_a_branches)} Highest Class A Stock Out Rate"
+                        "<br><span style='font-size:10px;color:#94a3b8'>PRIORITY BRANCH RISK RANKING</span>"
+                    )
                 )
 
-                st.plotly_chart(fig_high_class_a, use_container_width=True)
+                st.plotly_chart(
+                    fig_high_class_a, use_container_width=True, config=PLOTLY_BAR_CONFIG
+                )
 
         with zero_rank_col:
             if zero_class_a_branches.empty:
@@ -2822,11 +3064,8 @@ with tab_inventory:
                 )
 
                 fig_zero_class_a.update_traces(
-                    marker_color="#10b981",
-                    marker_line=dict(width=0),
-                    opacity=0.92,
+                    texttemplate="<b>%{text}</b>",
                     textposition="outside",
-                    cliponaxis=False,
                     hovertemplate=(
                         "<b>%{customdata[1]}</b><br>"
                         "Area: <b>%{customdata[0]}</b><br>"
@@ -2837,38 +3076,27 @@ with tab_inventory:
                     ),
                 )
 
+                apply_executive_bar_style(
+                    fig_zero_class_a,
+                    accent_color="#10b981",
+                    value_axis_title="Class A stock-status coverage count",
+                    value_max=max(1, zero_coverage_max * 1.22),
+                    category_order=zero_order,
+                    orientation="h",
+                    percent=False,
+                    height=max(410, 44 * len(zero_class_a_branches) + 130),
+                    right_margin=66,
+                )
                 fig_zero_class_a.update_layout(
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    height=max(410, 42 * len(zero_class_a_branches) + 120),
-                    margin=dict(t=68, b=46, l=24, r=58),
-                    showlegend=False,
-                    bargap=0.28,
-                    title=dict(x=0.02, xanchor="left", font=dict(size=16)),
-                    hoverlabel=dict(
-                        bgcolor=PLOTLY_HOVER_BG,
-                        bordercolor=PLOTLY_HOVER_BORDER,
-                        font=dict(color=PLOTLY_HOVER_TEXT, size=11),
-                    ),
-                    xaxis=dict(
-                        title="Class A Stock Status Coverage Count",
-                        range=[0, max(1, zero_coverage_max * 1.22)],
-                        gridcolor="rgba(148,163,184,0.14)",
-                        zeroline=False,
-                        automargin=True,
-                    ),
-                    yaxis=dict(
-                        title="",
-                        type="category",
-                        categoryorder="array",
-                        categoryarray=zero_order,
-                        autorange="reversed",
-                        showgrid=False,
-                        automargin=True,
-                    ),
+                    title_text=(
+                        f"Top {len(zero_class_a_branches)} Branches with 0% Class A Stock Out Rate"
+                        "<br><span style='font-size:10px;color:#94a3b8'>ZERO-OOS LEADERS BY CLASS A COVERAGE</span>"
+                    )
                 )
 
-                st.plotly_chart(fig_zero_class_a, use_container_width=True)
+                st.plotly_chart(
+                    fig_zero_class_a, use_container_width=True, config=PLOTLY_BAR_CONFIG
+                )
                 st.caption(
                     "Zero-stockout leaders are ranked by Class A stock-status coverage count; "
                     "every branch shown has exactly 0% Class A Stock Out Rate."
@@ -2962,6 +3190,7 @@ with tab_inventory:
         "Pareto Action Models",
         f"Transfer priorities for {selected_branch}",
     )
+    render_stock_status_legend(branch_data)
 
     def render_pareto_table(df, pareto_class, hex_color):
         class_df = df[df["pareto_class"] == pareto_class].copy()
@@ -3016,12 +3245,12 @@ with tab_inventory:
         rows_html = []
         for _, row in final_df.iterrows():
             status_text = str(row["Status"])
-            status_class = " stockout" if status_text.strip().lower() == "stockout" else ""
+            status_class = stock_status_style_class(status_text)
             rows_html.append(
                 "<tr>"
                 f"<td class='num'>{int(row['Rank'])}</td>"
                 f"<td>{html.escape(str(row['Model']))}</td>"
-                f"<td><span class='pareto-status{status_class}'>{html.escape(status_text)}</span></td>"
+                f"<td><span class='pareto-status {status_class}'>{html.escape(status_text)}</span></td>"
                 f"<td class='num'>{int(row['Inventory']):,}</td>"
                 f"<td class='num'>{int(row['Transfer']):,}</td>"
                 f"<td class='num'>{int(row['DOI']):,}</td>"
