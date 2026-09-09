@@ -3425,7 +3425,7 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
             _ = ppt_add_title(model_slide, f"Model Stock Status — {branch}", f"Rows {start+1:,}–{end_num:,} of {len(model_df):,} • {selected_area}", colors)
             _ = ppt_add_table(model_slide, page_df, Inches(0.55), Inches(1.42), Inches(12.2), Inches(5.45), "Operational model action list", colors, font_size=7.5)
             _ = ppt_add_footer(model_slide, f"Model stock status • {branch} • Inventory / Transfer / DOI", colors)
-
+    output = io.BytesIO()
     _ = prs.save(output)
     return output.getvalue()
 
