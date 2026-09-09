@@ -82,11 +82,11 @@ def detect_excel_engine(file_path_or_buffer):
             if hasattr(file_path_or_buffer, "tell"):
                 original_position = file_path_or_buffer.tell()
             if hasattr(file_path_or_buffer, "seek"):
-                file_path_or_buffer.seek(0)
+                _ = file_path_or_buffer.seek(0)
             signature = file_path_or_buffer.read(8)
         finally:
             if hasattr(file_path_or_buffer, "seek"):
-                file_path_or_buffer.seek(
+                _ = file_path_or_buffer.seek(
                     original_position if original_position is not None else 0
                 )
     else:
@@ -111,7 +111,7 @@ def validate_excel_bytes(file_bytes):
     """Validate that persisted bytes are a supported Excel container."""
     if not file_bytes:
         return False
-    detect_excel_engine(io.BytesIO(file_bytes))
+    _ = detect_excel_engine(io.BytesIO(file_bytes))
     return True
 
 
@@ -255,7 +255,7 @@ def upload_cloud_workbook(file_bytes):
         return False
 
     headers = _supabase_auth_headers(config)
-    headers.update(
+    _ = headers.update(
         {
             "Content-Type": (
                 "application/vnd.openxmlformats-officedocument."
@@ -285,7 +285,7 @@ def upload_cloud_workbook(file_bytes):
 def save_local_cache(file_bytes):
     """Local fallback/cache. Cloud storage remains the durable source online."""
     with open(LOCAL_CACHE_FILE, "wb") as file_handle:
-        file_handle.write(file_bytes)
+        _ = file_handle.write(file_bytes)
 
 
 def load_local_cache():
@@ -319,12 +319,12 @@ def initialize_persistent_workbook():
                 # Never activate a cloud object unless it is really an Excel file.
                 # This also protects the app if an old/incorrect object was uploaded
                 # to the same Supabase Storage path.
-                validate_excel_bytes(cloud_bytes)
+                _ = validate_excel_bytes(cloud_bytes)
                 st.session_state["scm_workbook_bytes"] = cloud_bytes
                 st.session_state["scm_storage_source"] = "Cloud • Supabase"
                 # Refresh the local cache for faster fallback/debugging.
                 try:
-                    save_local_cache(cloud_bytes)
+                    _ = save_local_cache(cloud_bytes)
                 except Exception:
                     pass
                 return cloud_bytes, "Cloud • Supabase"
@@ -334,7 +334,7 @@ def initialize_persistent_workbook():
     local_bytes = load_local_cache()
     if local_bytes:
         try:
-            validate_excel_bytes(local_bytes)
+            _ = validate_excel_bytes(local_bytes)
         except Exception as exc:
             st.session_state["scm_local_warning"] = (
                 "The saved local cache is not a valid Excel workbook: " + str(exc)
@@ -1611,7 +1611,9 @@ with st.container(key="scm_executive_header"):
                     Inventory visibility, Pareto risk prioritization, stockout trends,
                     Days of Inventory, and branch-level action monitoring.
                 </div>
-        
+                <a href="https://scmdrp.streamlit.app/" target="_blank" class="drp-action-btn">
+                    Launch Delivery Requirements Plan (DRP) ↗
+                </a>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1888,12 +1890,12 @@ saved_workbook_bytes, storage_source = initialize_persistent_workbook()
 def persist_uploaded_workbook(uploaded_bytes):
     """Validate and persist one uploaded workbook. Returns a success message."""
     # Full workbook validation happens before any persistent copy is replaced.
-    process_excel_file(io.BytesIO(uploaded_bytes))
+    _ = process_excel_file(io.BytesIO(uploaded_bytes))
 
     persistence_messages = []
 
     try:
-        save_local_cache(uploaded_bytes)
+        _ = save_local_cache(uploaded_bytes)
         persistence_messages.append("local cache")
     except Exception as exc:
         # Local cache is operational fallback only; cloud may still succeed.
@@ -1901,7 +1903,7 @@ def persist_uploaded_workbook(uploaded_bytes):
 
     new_storage_source = "Local cache"
     if cloud_config["configured"]:
-        upload_cloud_workbook(uploaded_bytes)
+        _ = upload_cloud_workbook(uploaded_bytes)
         new_storage_source = "Cloud • Supabase"
         persistence_messages.append("Supabase cloud storage")
 
@@ -1975,7 +1977,7 @@ def data_sync_dialog():
         # Clear cached presentation artifacts. The next render rebuilds the
         # presentation silently from the newly synchronized workbook.
         st.cache_data.clear()
-        st.session_state.pop("scm_presentation_error", None)
+        _ = st.session_state.pop("scm_presentation_error", None)
         st.rerun()
 
 # =========================================================
@@ -2070,7 +2072,7 @@ def apply_executive_bar_style(
     right_margin=28,
 ):
     """Apply one consistent executive visual system to bar charts."""
-    fig.update_traces(
+    _ = fig.update_traces(
         marker=dict(
             color=accent_color,
             line=dict(color=accent_color, width=0),
@@ -2113,7 +2115,7 @@ def apply_executive_bar_style(
         xaxis = category_axis
         yaxis = value_axis
 
-    fig.update_layout(
+    _ = fig.update_layout(
         template=PLOTLY_TEMPLATE,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -2191,7 +2193,7 @@ def create_styled_line_chart(
     fig = go.Figure()
 
     if chart_df.empty:
-        fig.add_annotation(
+        _ = fig.add_annotation(
             text="No valid data available for this KPI",
             x=0.5,
             y=0.5,
@@ -2200,7 +2202,7 @@ def create_styled_line_chart(
             showarrow=False,
             font=dict(size=14, color="#94a3b8"),
         )
-        fig.update_layout(
+        _ = fig.update_layout(
             template=PLOTLY_TEMPLATE,
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
@@ -2291,7 +2293,7 @@ def create_styled_line_chart(
         for index in range(len(chart_df))
     ]
 
-    fig.add_trace(
+    _ = fig.add_trace(
         go.Scatter(
             x=chart_x,
             y=plot_y,
@@ -2383,7 +2385,7 @@ def create_styled_line_chart(
                 "Stable": "→",
             }[trend_direction]
 
-            fig.add_trace(
+            _ = fig.add_trace(
                 go.Scatter(
                     x=chart_x,
                     y=trend_y,
@@ -2438,20 +2440,20 @@ def create_styled_line_chart(
 
     if is_weekly:
         # Exact observations only: no in-between dates.
-        xaxis_config.update(
+        _ = xaxis_config.update(
             tickmode="array",
             tickvals=chart_x.tolist(),
             ticktext=tick_text.tolist(),
         )
     else:
         # Jan-Dec month ordering; only months present in the data render.
-        xaxis_config.update(
+        _ = xaxis_config.update(
             tickmode="array",
             tickvals=chart_x.tolist(),
             ticktext=tick_text,
         )
 
-    fig.update_layout(
+    _ = fig.update_layout(
         template=PLOTLY_TEMPLATE,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -2765,8 +2767,8 @@ def ppt_figure_png(fig, width=1500, height=820):
     muted = "#94a3b8" if dark else "#64748b"
     grid = "#334155" if dark else "#e2e8f0"
 
-    mpl_fig.patch.set_facecolor(panel)
-    ax.set_facecolor(panel)
+    _ = mpl_fig.patch.set_facecolor(panel)
+    _ = ax.set_facecolor(panel)
 
     traces = list(getattr(fig, "data", []) or [])
     orientation = "v"
@@ -2940,14 +2942,14 @@ def ppt_figure_png(fig, width=1500, height=820):
     _ = ax.grid(axis="y" if orientation != "h" else "x", color=grid, alpha=0.42, linewidth=0.7)
     _ = ax.grid(axis="x" if orientation != "h" else "y", visible=False)
     for spine in ax.spines.values():
-        spine.set_visible(False)
+        _ = spine.set_visible(False)
     _ = ax.tick_params(colors=muted, labelsize=8.5, length=0, pad=4)
 
     # Match percentage axes from dashboard charts.
     tickformat = str(getattr(value_axis, "tickformat", "") or "") if value_axis is not None else ""
     if tickformat in {".0%", "0%", ".1%"}:
         import matplotlib.ticker as mticker
-        ax.yaxis.set_major_formatter(mticker.PercentFormatter(xmax=100, decimals=0)) if orientation != "h" else ax.xaxis.set_major_formatter(mticker.PercentFormatter(xmax=100, decimals=0))
+        _ = ax.yaxis.set_major_formatter(mticker.PercentFormatter(xmax=100, decimals=0)) if orientation != "h" else ax.xaxis.set_major_formatter(mticker.PercentFormatter(xmax=100, decimals=0))
 
     handles, labels = ax.get_legend_handles_labels()
     if handles and any(labels):
@@ -3109,7 +3111,7 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
 
     # ----- Cover -----
     slide = prs.slides.add_slide(blank)
-    ppt_add_background(slide, colors)
+    _ = ppt_add_background(slide, colors)
     cover = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.60), Inches(0.75), Inches(12.1), Inches(5.65))
     _ = cover.fill.solid()
     cover.fill.fore_color.rgb = ppt_rgb(colors["surface"])
@@ -3180,7 +3182,7 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
     fp.font.name = "Aptos"
     fp.font.size = Pt(9)
     fp.font.color.rgb = ppt_rgb(colors["muted"])
-    ppt_add_footer(slide, "SCM Executive Control Tower • Generated from dashboard source data", colors)
+    _ = ppt_add_footer(slide, "SCM Executive Control Tower • Generated from dashboard source data", colors)
 
     # ----- Trend slides: YTD and Weekly -----
     trend_specs = [
@@ -3204,8 +3206,8 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
             )
         for start in range(0, len(figs), 2):
             slide = prs.slides.add_slide(blank)
-            ppt_add_background(slide, colors)
-            ppt_add_title(
+            _ = ppt_add_background(slide, colors)
+            _ = ppt_add_title(
                 slide,
                 f"MUTI MC Trends — {label}",
                 f"Same KPI presentation as dashboard • {selected_area} • Source dates only",
@@ -3214,9 +3216,9 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
             for pos, fig in enumerate(figs[start:start+2]):
                 img = ppt_figure_png(fig)
                 x = Inches(0.55 + (pos * 6.15))
-                ppt_add_panel(slide, x, Inches(1.38), Inches(5.95), Inches(5.35), "", colors)
-                ppt_add_image(slide, img, x + Inches(0.12), Inches(1.56), Inches(5.70), Inches(4.95))
-            ppt_add_footer(slide, f"{label} trends • {selected_area}", colors)
+                _ = ppt_add_panel(slide, x, Inches(1.38), Inches(5.95), Inches(5.35), "", colors)
+                _ = ppt_add_image(slide, img, x + Inches(0.12), Inches(1.56), Inches(5.70), Inches(4.95))
+            _ = ppt_add_footer(slide, f"{label} trends • {selected_area}", colors)
 
     # ----- Area rates -----
     area_rates = []
@@ -3246,23 +3248,23 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
     if not area_df.empty:
         area_order = area_df["Area"].tolist()
         fig_avg = px.bar(area_df, x="Area", y="Average Stock Out Rate", text="Average Stock Out Rate", template=PLOTLY_TEMPLATE, title="Average Stock Out Rate per Area")
-        fig_avg.update_traces(texttemplate="<b>%{text:.0f}%</b>", textposition="outside", hovertemplate="<b>%{x}</b><br>Average Stock Out Rate: <b>%{y:.0f}%</b><extra></extra>")
-        apply_executive_bar_style(fig_avg, accent_color="#6366f1", value_axis_title="Stockout rate", value_max=max(10, float(area_df["Average Stock Out Rate"].max()) * 1.24), category_order=area_order, orientation="v", percent=True, height=425)
-        fig_avg.update_layout(title_text="Average Stock Out Rate per Area<br><span style='font-size:10px;color:#94a3b8'>NETWORK RISK COMPARISON</span>")
+        _ = fig_avg.update_traces(texttemplate="<b>%{text:.0f}%</b>", textposition="outside", hovertemplate="<b>%{x}</b><br>Average Stock Out Rate: <b>%{y:.0f}%</b><extra></extra>")
+        _ = apply_executive_bar_style(fig_avg, accent_color="#6366f1", value_axis_title="Stockout rate", value_max=max(10, float(area_df["Average Stock Out Rate"].max()) * 1.24), category_order=area_order, orientation="v", percent=True, height=425)
+        _ = fig_avg.update_layout(title_text="Average Stock Out Rate per Area<br><span style='font-size:10px;color:#94a3b8'>NETWORK RISK COMPARISON</span>")
 
         fig_a = px.bar(area_df, x="Area", y="Class A Stock Out Rate", text="Class A Stock Out Rate", template=PLOTLY_TEMPLATE, title="Class A Stock Out Rate per Area", custom_data=["Class A Stock Out Count", "Class A Total Stock Status Count"])
-        fig_a.update_traces(texttemplate="<b>%{text:.0f}%</b>", textposition="outside", hovertemplate="<b>%{x}</b><br>Class A Stock Out Rate: <b>%{y:.0f}%</b><br>Class A Stock Out Count: <b>%{customdata[0]}</b><br>Class A Total Stock Status Count: <b>%{customdata[1]}</b><extra></extra>")
-        apply_executive_bar_style(fig_a, accent_color="#f43f5e", value_axis_title="Class A stockout rate", value_max=max(10, float(area_df["Class A Stock Out Rate"].max()) * 1.24), category_order=area_order, orientation="v", percent=True, height=425)
-        fig_a.update_layout(title_text="Class A Stock Out Rate per Area<br><span style='font-size:10px;color:#94a3b8'>HIGHEST-PRIORITY PARETO RISK</span>")
+        _ = fig_a.update_traces(texttemplate="<b>%{text:.0f}%</b>", textposition="outside", hovertemplate="<b>%{x}</b><br>Class A Stock Out Rate: <b>%{y:.0f}%</b><br>Class A Stock Out Count: <b>%{customdata[0]}</b><br>Class A Total Stock Status Count: <b>%{customdata[1]}</b><extra></extra>")
+        _ = apply_executive_bar_style(fig_a, accent_color="#f43f5e", value_axis_title="Class A stockout rate", value_max=max(10, float(area_df["Class A Stock Out Rate"].max()) * 1.24), category_order=area_order, orientation="v", percent=True, height=425)
+        _ = fig_a.update_layout(title_text="Class A Stock Out Rate per Area<br><span style='font-size:10px;color:#94a3b8'>HIGHEST-PRIORITY PARETO RISK</span>")
 
         slide = prs.slides.add_slide(blank)
-        ppt_add_background(slide, colors)
-        ppt_add_title(slide, "Stock Out Rate per Area", f"Average + Class A comparison • {selected_area}", colors)
+        _ = ppt_add_background(slide, colors)
+        _ = ppt_add_title(slide, "Stock Out Rate per Area", f"Average + Class A comparison • {selected_area}", colors)
         for pos, fig in enumerate([fig_avg, fig_a]):
             x = Inches(0.55 + pos * 6.15)
-            ppt_add_panel(slide, x, Inches(1.38), Inches(5.95), Inches(5.35), "", colors)
-            ppt_add_image(slide, ppt_figure_png(fig), x + Inches(0.12), Inches(1.56), Inches(5.70), Inches(4.95))
-        ppt_add_footer(slide, f"Area comparison • {selected_area}", colors)
+            _ = ppt_add_panel(slide, x, Inches(1.38), Inches(5.95), Inches(5.35), "", colors)
+            _ = ppt_add_image(slide, ppt_figure_png(fig), x + Inches(0.12), Inches(1.56), Inches(5.70), Inches(4.95))
+        _ = ppt_add_footer(slide, f"Area comparison • {selected_area}", colors)
 
     # ----- Performance Overview -----
     rate_a = calculate_stockout_rate(selected_area_data, "Class A")
@@ -3270,8 +3272,8 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
     rate_c = calculate_stockout_rate(selected_area_data, "Class C")
     avg_rate = round_half_up((rate_a + rate_b + rate_c) / 3)
     slide = prs.slides.add_slide(blank)
-    ppt_add_background(slide, colors)
-    ppt_add_title(slide, "Performance Overview", f"Current raw-data stockout profile • {selected_area}", colors)
+    _ = ppt_add_background(slide, colors)
+    _ = ppt_add_title(slide, "Performance Overview", f"Current raw-data stockout profile • {selected_area}", colors)
     cards = [
         ("Class A Rate", f"{rate_a}%", "HIGH PRIORITY RISK", colors["red"]),
         ("Class B Rate", f"{rate_b}%", "MEDIUM PRIORITY RISK", colors["amber"]),
@@ -3279,7 +3281,7 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
         ("Average Rate", f"{avg_rate}%", "PERFORMANCE INDEX", colors["blue"]),
     ]
     for i, (title, value, badge, accent) in enumerate(cards):
-        ppt_add_metric_card(slide, Inches(0.55 + i * 3.08), Inches(1.65), Inches(2.82), Inches(1.65), title, value, badge, accent, colors)
+        _ = ppt_add_metric_card(slide, Inches(0.55 + i * 3.08), Inches(1.65), Inches(2.82), Inches(1.65), title, value, badge, accent, colors)
 
     detail_box = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.55), Inches(3.65), Inches(12.2), Inches(2.35))
     _ = detail_box.fill.solid()
@@ -3302,7 +3304,7 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
         p.font.size = Pt(11)
         p.font.color.rgb = ppt_rgb(colors["text"])
         p.space_after = Pt(6)
-    ppt_add_footer(slide, f"Performance overview • {selected_area}", colors)
+    _ = ppt_add_footer(slide, f"Performance overview • {selected_area}", colors)
 
     # ----- Class A branch ranking -----
     branch_source = selected_area_data.copy()
@@ -3325,15 +3327,15 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
         high = branch_rank_summary[branch_rank_summary["rate"] > 0].sort_values(["rate", "stockout", "total", "branch"], ascending=[False, False, False, True]).head(10).reset_index(drop=True)
         zero = branch_rank_summary[branch_rank_summary["rate"] == 0].sort_values(["total", "branch"], ascending=[False, True]).head(10).reset_index(drop=True)
         slide = prs.slides.add_slide(blank)
-        ppt_add_background(slide, colors)
-        ppt_add_title(slide, "Class A Branch Stockout Ranking", f"Top branch risks and zero-stockout leaders • {selected_area}", colors)
+        _ = ppt_add_background(slide, colors)
+        _ = ppt_add_title(slide, "Class A Branch Stockout Ranking", f"Top branch risks and zero-stockout leaders • {selected_area}", colors)
 
         if not high.empty:
             high_order = high["display"].tolist()
             fig_high = px.bar(high, x="rate", y="display", orientation="h", text="rate", template=PLOTLY_TEMPLATE, title=f"Top {len(high)} Highest Class A Stock Out Rate")
-            fig_high.update_traces(texttemplate="<b>%{text:.0f}%</b>", textposition="outside")
-            apply_executive_bar_style(fig_high, accent_color="#f43f5e", value_axis_title="Class A stockout rate", value_max=min(105, max(10, float(high["rate"].max()) * 1.18)), category_order=high_order, orientation="h", percent=True, height=410, right_margin=54)
-            fig_high.update_layout(title_text=f"Top {len(high)} Highest Class A Stock Out Rate<br><span style='font-size:10px;color:#94a3b8'>PRIORITY BRANCH RISK RANKING</span>")
+            _ = fig_high.update_traces(texttemplate="<b>%{text:.0f}%</b>", textposition="outside")
+            _ = apply_executive_bar_style(fig_high, accent_color="#f43f5e", value_axis_title="Class A stockout rate", value_max=min(105, max(10, float(high["rate"].max()) * 1.18)), category_order=high_order, orientation="h", percent=True, height=410, right_margin=54)
+            _ = fig_high.update_layout(title_text=f"Top {len(high)} Highest Class A Stock Out Rate<br><span style='font-size:10px;color:#94a3b8'>PRIORITY BRANCH RISK RANKING</span>")
         else:
             fig_high = None
 
@@ -3341,19 +3343,19 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
             zero = zero.copy(); zero["zero_label"] = "0% OOS"
             zero_order = zero["display"].tolist()
             fig_zero = px.bar(zero, x="total", y="display", orientation="h", text="zero_label", template=PLOTLY_TEMPLATE, title=f"Top {len(zero)} Branches with 0% Class A Stock Out Rate")
-            fig_zero.update_traces(texttemplate="<b>%{text}</b>", textposition="outside")
-            apply_executive_bar_style(fig_zero, accent_color="#10b981", value_axis_title="Class A stock-status coverage count", value_max=max(1, float(zero["total"].max()) * 1.22), category_order=zero_order, orientation="h", percent=False, height=410, right_margin=66)
-            fig_zero.update_layout(title_text=f"Top {len(zero)} Branches with 0% Class A Stock Out Rate<br><span style='font-size:10px;color:#94a3b8'>ZERO-OOS LEADERS BY CLASS A COVERAGE</span>")
+            _ = fig_zero.update_traces(texttemplate="<b>%{text}</b>", textposition="outside")
+            _ = apply_executive_bar_style(fig_zero, accent_color="#10b981", value_axis_title="Class A stock-status coverage count", value_max=max(1, float(zero["total"].max()) * 1.22), category_order=zero_order, orientation="h", percent=False, height=410, right_margin=66)
+            _ = fig_zero.update_layout(title_text=f"Top {len(zero)} Branches with 0% Class A Stock Out Rate<br><span style='font-size:10px;color:#94a3b8'>ZERO-OOS LEADERS BY CLASS A COVERAGE</span>")
         else:
             fig_zero = None
 
         if fig_high is not None:
-            ppt_add_panel(slide, Inches(0.55), Inches(1.38), Inches(5.95), Inches(5.35), "", colors)
-            ppt_add_image(slide, ppt_figure_png(fig_high), Inches(0.67), Inches(1.56), Inches(5.70), Inches(4.95))
+            _ = ppt_add_panel(slide, Inches(0.55), Inches(1.38), Inches(5.95), Inches(5.35), "", colors)
+            _ = ppt_add_image(slide, ppt_figure_png(fig_high), Inches(0.67), Inches(1.56), Inches(5.70), Inches(4.95))
         if fig_zero is not None:
-            ppt_add_panel(slide, Inches(6.75), Inches(1.38), Inches(5.95), Inches(5.35), "", colors)
-            ppt_add_image(slide, ppt_figure_png(fig_zero), Inches(6.87), Inches(1.56), Inches(5.70), Inches(4.95))
-        ppt_add_footer(slide, f"Class A branch ranking • {selected_area}", colors)
+            _ = ppt_add_panel(slide, Inches(6.75), Inches(1.38), Inches(5.95), Inches(5.35), "", colors)
+            _ = ppt_add_image(slide, ppt_figure_png(fig_zero), Inches(6.87), Inches(1.56), Inches(5.70), Inches(4.95))
+        _ = ppt_add_footer(slide, f"Class A branch ranking • {selected_area}", colors)
 
     # ----- Every branch: rates + model stock status -----
     branches = sorted([b for b in selected_area_data["branch"].dropna().astype(str).str.strip().unique() if b])
@@ -3380,8 +3382,8 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
 
         # Build one summary slide per branch, followed by paginated model slides if needed.
         slide = prs.slides.add_slide(blank)
-        ppt_add_background(slide, colors)
-        ppt_add_title(slide, f"Branch Performance — {branch}", f"{selected_area} • Stockout rate, average performance, and model action status", colors)
+        _ = ppt_add_background(slide, colors)
+        _ = ppt_add_title(slide, f"Branch Performance — {branch}", f"{selected_area} • Stockout rate, average performance, and model action status", colors)
         branch_cards = [
             ("Branch Class A Rate", f"{a}%", "HIGH PRIORITY RISK", colors["red"]),
             ("Branch Class B Rate", f"{b}%", "MEDIUM PRIORITY RISK", colors["amber"]),
@@ -3389,7 +3391,7 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
             ("Branch Average", f"{avg}%", "PERFORMANCE INDEX", colors["blue"]),
         ]
         for i, (title, value, badge, accent_color) in enumerate(branch_cards):
-            ppt_add_metric_card(slide, Inches(0.55 + i * 3.08), Inches(1.47), Inches(2.82), Inches(1.52), title, value, badge, accent_color, colors)
+            _ = ppt_add_metric_card(slide, Inches(0.55 + i * 3.08), Inches(1.47), Inches(2.82), Inches(1.52), title, value, badge, accent_color, colors)
 
         info = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.55), Inches(3.33), Inches(12.2), Inches(2.75))
         _ = info.fill.solid()
@@ -3412,17 +3414,17 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
             p.font.size = Pt(10.5)
             p.font.color.rgb = ppt_rgb(colors["text"])
             p.space_after = Pt(5)
-        ppt_add_footer(slide, f"Branch performance • {branch} • {selected_area}", colors)
+        _ = ppt_add_footer(slide, f"Branch performance • {branch} • {selected_area}", colors)
 
         page_size = 16
         for start in range(0, len(model_df), page_size):
             page_df = model_df.iloc[start:start + page_size].copy()
             model_slide = prs.slides.add_slide(blank)
-            ppt_add_background(model_slide, colors)
+            _ = ppt_add_background(model_slide, colors)
             end_num = start + len(page_df)
-            ppt_add_title(model_slide, f"Model Stock Status — {branch}", f"Rows {start+1:,}–{end_num:,} of {len(model_df):,} • {selected_area}", colors)
-            ppt_add_table(model_slide, page_df, Inches(0.55), Inches(1.42), Inches(12.2), Inches(5.45), "Operational model action list", colors, font_size=7.5)
-            ppt_add_footer(model_slide, f"Model stock status • {branch} • Inventory / Transfer / DOI", colors)
+            _ = ppt_add_title(model_slide, f"Model Stock Status — {branch}", f"Rows {start+1:,}–{end_num:,} of {len(model_df):,} • {selected_area}", colors)
+            _ = ppt_add_table(model_slide, page_df, Inches(0.55), Inches(1.42), Inches(12.2), Inches(5.45), "Operational model action list", colors, font_size=7.5)
+            _ = ppt_add_footer(model_slide, f"Model stock status • {branch} • Inventory / Transfer / DOI", colors)
 
     _ = prs.save(output)
     return output.getvalue()
@@ -3475,7 +3477,7 @@ with tab_inventory:
                 key="open_scm_data_sync_dialog",
                 help="Open the workbook import and synchronization dialog.",
             ):
-                data_sync_dialog()
+                _ = data_sync_dialog()
 
             if saved_workbook_bytes is not None:
                 # We fetch the area value bound to the selectbox key safely right here for export.
@@ -3614,7 +3616,7 @@ with tab_inventory:
     row1_left, row1_right = st.columns(2, gap="small")
     with row1_left:
         with st.container(border=True):
-            st.plotly_chart(
+            _ = st.plotly_chart(
                 create_styled_line_chart(
                 kpi_data,
                 "class_a_doi",
@@ -3630,7 +3632,7 @@ with tab_inventory:
 
     with row1_right:
         with st.container(border=True):
-            st.plotly_chart(
+            _ = st.plotly_chart(
                 create_styled_line_chart(
                 kpi_data,
                 "overall_doi",
@@ -3647,7 +3649,7 @@ with tab_inventory:
     row2_left, row2_right = st.columns(2, gap="small")
     with row2_left:
         with st.container(border=True):
-            st.plotly_chart(
+            _ = st.plotly_chart(
                 create_styled_line_chart(
                 kpi_data,
                 "per_branch",
@@ -3662,7 +3664,7 @@ with tab_inventory:
 
     with row2_right:
         with st.container(border=True):
-            st.plotly_chart(
+            _ = st.plotly_chart(
                 create_styled_line_chart(
                 kpi_data,
                 "class_a_out",
@@ -3678,7 +3680,7 @@ with tab_inventory:
     row3_left, row3_right = st.columns(2, gap="small")
     with row3_left:
         with st.container(border=True):
-            st.plotly_chart(
+            _ = st.plotly_chart(
                 create_styled_line_chart(
                 kpi_data,
                 "before_po",
@@ -3693,7 +3695,7 @@ with tab_inventory:
 
     with row3_right:
         with st.container(border=True):
-            st.plotly_chart(
+            _ = st.plotly_chart(
                 create_styled_line_chart(
                 kpi_data,
                 "after_po",
@@ -3898,7 +3900,7 @@ with tab_inventory:
                 title="Average Stock Out Rate per Area",
             )
 
-            fig_bar.update_traces(
+            _ = fig_bar.update_traces(
                 texttemplate="<b>%{text:.0f}%</b>",
                 textposition="outside",
                 hovertemplate=(
@@ -3909,7 +3911,7 @@ with tab_inventory:
             )
 
             avg_bar_max = float(area_rates_df["Average Stock Out Rate"].max())
-            apply_executive_bar_style(
+            _ = apply_executive_bar_style(
                 fig_bar,
                 accent_color="#6366f1",
                 value_axis_title="Stockout rate",
@@ -3919,7 +3921,7 @@ with tab_inventory:
                 percent=True,
                 height=425,
             )
-            fig_bar.update_layout(
+            _ = fig_bar.update_layout(
                 title_text=(
                     "Average Stock Out Rate per Area"
                     "<br><span style='font-size:10px;color:#94a3b8'>NETWORK RISK COMPARISON</span>"
@@ -3941,7 +3943,7 @@ with tab_inventory:
                 custom_data=["Class A Stock Out Count", "Class A Total Stock Status Count"],
             )
 
-            fig_class_a.update_traces(
+            _ = fig_class_a.update_traces(
                 texttemplate="<b>%{text:.0f}%</b>",
                 textposition="outside",
                 hovertemplate=(
@@ -3954,7 +3956,7 @@ with tab_inventory:
             )
 
             class_a_bar_max = float(area_rates_df["Class A Stock Out Rate"].max())
-            apply_executive_bar_style(
+            _ = apply_executive_bar_style(
                 fig_class_a,
                 accent_color="#f43f5e",
                 value_axis_title="Class A stockout rate",
@@ -3964,7 +3966,7 @@ with tab_inventory:
                 percent=True,
                 height=425,
             )
-            fig_class_a.update_layout(
+            _ = fig_class_a.update_layout(
                 title_text=(
                     "Class A Stock Out Rate per Area"
                     "<br><span style='font-size:10px;color:#94a3b8'>HIGHEST-PRIORITY PARETO RISK</span>"
@@ -4116,7 +4118,7 @@ with tab_inventory:
                     ],
                 )
 
-                fig_high_class_a.update_traces(
+                _ = fig_high_class_a.update_traces(
                     texttemplate="<b>%{text:.0f}%</b>",
                     textposition="outside",
                     hovertemplate=(
@@ -4129,7 +4131,7 @@ with tab_inventory:
                     ),
                 )
 
-                apply_executive_bar_style(
+                _ = apply_executive_bar_style(
                     fig_high_class_a,
                     accent_color="#f43f5e",
                     value_axis_title="Class A stockout rate",
@@ -4140,7 +4142,7 @@ with tab_inventory:
                     height=max(410, 44 * len(high_class_a_branches) + 130),
                     right_margin=54,
                 )
-                fig_high_class_a.update_layout(
+                _ = fig_high_class_a.update_layout(
                     title_text=(
                         f"Top {len(high_class_a_branches)} Highest Class A Stock Out Rate"
                         "<br><span style='font-size:10px;color:#94a3b8'>PRIORITY BRANCH RISK RANKING</span>"
@@ -4179,7 +4181,7 @@ with tab_inventory:
                     ],
                 )
 
-                fig_zero_class_a.update_traces(
+                _ = fig_zero_class_a.update_traces(
                     texttemplate="<b>%{text}</b>",
                     textposition="outside",
                     hovertemplate=(
@@ -4192,7 +4194,7 @@ with tab_inventory:
                     ),
                 )
 
-                apply_executive_bar_style(
+                _ = apply_executive_bar_style(
                     fig_zero_class_a,
                     accent_color="#10b981",
                     value_axis_title="Class A stock-status coverage count",
@@ -4203,7 +4205,7 @@ with tab_inventory:
                     height=max(410, 44 * len(zero_class_a_branches) + 130),
                     right_margin=66,
                 )
-                fig_zero_class_a.update_layout(
+                _ = fig_zero_class_a.update_layout(
                     title_text=(
                         f"Top {len(zero_class_a_branches)} Branches with 0% Class A Stock Out Rate"
                         "<br><span style='font-size:10px;color:#94a3b8'>ZERO-OOS LEADERS BY CLASS A COVERAGE</span>"
