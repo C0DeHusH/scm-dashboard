@@ -1630,7 +1630,6 @@ with st.container(key="scm_executive_header"):
             )
 
 
-
 # =========================================================
 # 3. DATA IMPORT & PROCESSING
 # =========================================================
@@ -1952,7 +1951,7 @@ def data_sync_dialog():
         do_import = st.button(
             "Validate & Sync",
             type="primary",
-            width="stretch",
+            use_container_width=True,
             key="scm_data_sync_confirm_button",
         )
     with info_col:
@@ -3402,9 +3401,50 @@ def cached_scm_presentation(workbook_bytes, selected_area, theme_name):
 
 
 # =========================================================
-# INITIALIZE PRIMARY TABS
+# INITIALIZE PRIMARY TABS & DATA ACTIONS
 # =========================================================
-tab_inventory, tab_procurements = st.tabs(["📊 Inventory Control Tower", "📦 Procurements"])
+tabs_col, action_col = st.columns([8.5, 1.5], vertical_alignment="bottom")
+
+with action_col:
+    with st.popover("Data Actions ▾", use_container_width=True):
+        st.markdown(
+            "<div style='font-weight:850; font-size:0.78rem; color:var(--scm-muted); margin-bottom:0.45rem;'>WORKBOOK & PRESENTATION</div>",
+            unsafe_allow_html=True,
+        )
+
+        if st.button(
+            "📥 Data Sync",
+            type="primary",
+            use_container_width=True,
+            key="open_scm_data_sync_dialog",
+            help="Open the workbook import and synchronization dialog.",
+        ):
+            data_sync_dialog()
+
+        if saved_workbook_bytes is not None:
+            # We fetch the area value bound to the selectbox key safely right here for export.
+            export_area = st.session_state.get("selected_scm_area_for_export", "All Areas")
+            
+            with st.spinner("Preparing presentation..."):
+                presentation_bytes = cached_scm_presentation(
+                    saved_workbook_bytes,
+                    export_area,
+                    SCM_THEME,
+                )
+                presentation_name = f"SCM_Control_Tower_{str(export_area).replace(' ', '_').replace('/', '-')}_Presentation.pptx"
+
+            # Replaces the old `components.html()` hack that produced the blank "None" message box
+            st.download_button(
+                label="📊 Export Presentation",
+                data=presentation_bytes,
+                file_name=presentation_name,
+                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                use_container_width=True,
+                help="Download the prepared PowerPoint presentation. YTD/Weekly trends are included; detailed model slides are Class A only and Greatwall is excluded from the presentation.",
+            )
+
+with tabs_col:
+    tab_inventory, tab_procurements = st.tabs(["📊 Inventory Control Tower", "📦 Procurements"])
 
 with tab_inventory:
     # =========================================================
@@ -3640,8 +3680,7 @@ with tab_inventory:
         areas = ["All Areas"] + sorted(
             [area for area in raw_data["area"].dropna().unique() if str(area).strip()]
         )
-        selected_area = st.selectbox("NETWORK SCOPE", areas)
-        st.session_state["selected_scm_area_for_export"] = selected_area
+        selected_area = st.selectbox("NETWORK SCOPE", areas, key="selected_scm_area_for_export")
 
     area_data = raw_data.copy()
     if selected_area != "All Areas":
@@ -3663,62 +3702,6 @@ with tab_inventory:
             """,
             unsafe_allow_html=True,
         )
-
-    # =========================================================
-    # DATA ACTIONS — IMPORT POPUP + DIRECT POWERPOINT DOWNLOAD
-    # =========================================================
-    action_col, action_note_col = st.columns([1.55, 4.45], gap="small", vertical_alignment="center")
-
-    with action_col:
-        with st.popover("Data Actions ▾", width="stretch"):
-            st.markdown(
-                "<div style='font-weight:850; font-size:0.78rem; color:var(--scm-muted); margin-bottom:0.45rem;'>WORKBOOK & PRESENTATION</div>",
-                unsafe_allow_html=True,
-            )
-
-            if st.button(
-                "📥 Data Sync",
-                type="primary",
-                width="stretch",
-                key="open_scm_data_sync_dialog",
-                help="Open the workbook import and synchronization dialog.",
-            ):
-                data_sync_dialog()
-
-            # The presentation is prepared on-demand and triggers an automatic browser download.
-            if st.button(
-                "📊 Export Presentation",
-                width="stretch",
-                key="export_scm_presentation_action",
-                help="Download the prepared PowerPoint presentation. YTD/Weekly trends are included; detailed model slides are Class A only and Greatwall is excluded from the presentation.",
-            ):
-                with st.spinner("Generating presentation..."):
-                    presentation_bytes = cached_scm_presentation(
-                        saved_workbook_bytes,
-                        selected_area,
-                        SCM_THEME,
-                    )
-                    presentation_name = (
-                        f"SCM_Control_Tower_{str(selected_area).replace(' ', '_').replace('/', '-')}_Presentation.pptx"
-                    )
-                    b64 = base64.b64encode(presentation_bytes).decode()
-                    dl_link = f"""
-                    <a id="auto-download" href="data:application/vnd.openxmlformats-officedocument.presentationml.presentation;base64,{b64}" download="{presentation_name}"></a>
-                    <script>
-                        document.getElementById('auto-download').click();
-                    </script>
-                    """
-                    components.html(dl_link, height=0)
-
-
-    with action_note_col:
-        st.markdown(
-            "<div style='padding-top:10px; color:var(--scm-muted); font-size:0.76rem;'>"
-            "Data Sync opens the Excel import field. Export Presentation generates and automatically downloads the prepared PowerPoint for the selected network scope."
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
 
     # =========================================================
     # 8. PERFORMANCE OVERVIEW — MOVED BELOW TRENDS
