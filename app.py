@@ -332,6 +332,34 @@ st.set_page_config(
 )
 
 # =========================================================
+# 1A. CUSTOM LIGHT / DARK THEME CONTROL
+#     UI-only enhancement. Dashboard calculations and data logic are unchanged.
+# =========================================================
+if "scm_theme" not in st.session_state:
+    # Keep the current executive appearance as the default.
+    st.session_state["scm_theme"] = "dark"
+
+
+def set_scm_theme(theme_name):
+    """Switch the custom dashboard presentation theme."""
+    if theme_name in {"light", "dark"}:
+        st.session_state["scm_theme"] = theme_name
+
+
+SCM_THEME = st.session_state["scm_theme"]
+SCM_IS_DARK = SCM_THEME == "dark"
+
+# Plotly presentation follows the dashboard theme.
+PLOTLY_TEMPLATE = "plotly_dark" if SCM_IS_DARK else "plotly_white"
+PLOTLY_HOVER_BG = "#0f172a" if SCM_IS_DARK else "#ffffff"
+PLOTLY_HOVER_TEXT = "#f8fafc" if SCM_IS_DARK else "#0f172a"
+PLOTLY_HOVER_BORDER = (
+    "rgba(148,163,184,0.28)"
+    if SCM_IS_DARK
+    else "rgba(15,23,42,0.16)"
+)
+
+# =========================================================
 # 2. EXECUTIVE UI / THEME
 # =========================================================
 st.markdown(
@@ -901,6 +929,318 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ---------------------------------------------------------
+# CUSTOM THEME PALETTE
+# ---------------------------------------------------------
+if SCM_IS_DARK:
+    theme_tokens = {
+        "page_bg": "#070b14",
+        "surface": "#0b1220",
+        "surface_2": "#0f172a",
+        "card_bg": "rgba(15, 23, 42, 0.72)",
+        "input_bg": "#0f172a",
+        "text": "#f8fafc",
+        "muted": "#94a3b8",
+        "border": "rgba(148, 163, 184, 0.18)",
+        "soft_border": "rgba(148, 163, 184, 0.11)",
+        "table_head": "rgba(148, 163, 184, 0.055)",
+        "hover": "rgba(99, 102, 241, 0.07)",
+        "hero_bg": "#0b1220",
+        "hero_title": "#f8fafc",
+        "hero_subtitle": "#cbd5e1",
+        "hero_kicker": "#a5b4fc",
+        "shadow": "0 10px 28px rgba(2, 6, 23, 0.22)",
+    }
+else:
+    theme_tokens = {
+        "page_bg": "#f6f8fc",
+        "surface": "#ffffff",
+        "surface_2": "#f8fafc",
+        "card_bg": "#ffffff",
+        "input_bg": "#ffffff",
+        "text": "#0f172a",
+        "muted": "#64748b",
+        "border": "rgba(15, 23, 42, 0.12)",
+        "soft_border": "rgba(15, 23, 42, 0.08)",
+        "table_head": "#f8fafc",
+        "hover": "rgba(79, 70, 229, 0.055)",
+        "hero_bg": "#ffffff",
+        "hero_title": "#0f172a",
+        "hero_subtitle": "#475569",
+        "hero_kicker": "#4f46e5",
+        "shadow": "0 10px 28px rgba(15, 23, 42, 0.08)",
+    }
+
+st.markdown(
+    f"""
+    <style>
+        :root {{
+            --scm-page-bg: {theme_tokens["page_bg"]};
+            --scm-surface: {theme_tokens["surface"]};
+            --scm-surface-2: {theme_tokens["surface_2"]};
+            --scm-card-bg: {theme_tokens["card_bg"]};
+            --scm-input-bg: {theme_tokens["input_bg"]};
+            --scm-text: {theme_tokens["text"]};
+            --scm-muted: {theme_tokens["muted"]};
+            --scm-border: {theme_tokens["border"]};
+            --scm-soft-border: {theme_tokens["soft_border"]};
+            --scm-table-head: {theme_tokens["table_head"]};
+            --scm-hover: {theme_tokens["hover"]};
+            --scm-hero-bg: {theme_tokens["hero_bg"]};
+            --scm-hero-title: {theme_tokens["hero_title"]};
+            --scm-hero-subtitle: {theme_tokens["hero_subtitle"]};
+            --scm-hero-kicker: {theme_tokens["hero_kicker"]};
+            --scm-theme-shadow: {theme_tokens["shadow"]};
+        }}
+
+        html,
+        body,
+        .stApp,
+        [data-testid="stAppViewContainer"],
+        [data-testid="stMain"] {{
+            background: var(--scm-page-bg) !important;
+            color: var(--scm-text) !important;
+        }}
+
+        [data-testid="stMainBlockContainer"] {{
+            color: var(--scm-text) !important;
+        }}
+
+        [data-testid="stMarkdownContainer"],
+        [data-testid="stMarkdownContainer"] p,
+        [data-testid="stMarkdownContainer"] li,
+        [data-testid="stMarkdownContainer"] h1,
+        [data-testid="stMarkdownContainer"] h2,
+        [data-testid="stMarkdownContainer"] h3,
+        [data-testid="stMarkdownContainer"] h4,
+        [data-testid="stWidgetLabel"],
+        [data-testid="stWidgetLabel"] p {{
+            color: var(--scm-text);
+        }}
+
+        [data-testid="stCaptionContainer"],
+        [data-testid="stCaptionContainer"] p {{
+            color: var(--scm-muted) !important;
+        }}
+
+        .hero-shell {{
+            background: var(--scm-hero-bg) !important;
+            border-color: var(--scm-border) !important;
+            border-left-color: var(--scm-indigo) !important;
+            box-shadow: var(--scm-theme-shadow) !important;
+        }}
+
+        .hero-title {{
+            color: var(--scm-hero-title) !important;
+        }}
+
+        .hero-subtitle {{
+            color: var(--scm-hero-subtitle) !important;
+        }}
+
+        .hero-kicker {{
+            color: var(--scm-hero-kicker) !important;
+        }}
+
+        .metric-card,
+        .metric-card-base,
+        div[data-testid="stVerticalBlockBorderWrapper"] {{
+            background: var(--scm-card-bg) !important;
+            border-color: var(--scm-border) !important;
+            box-shadow: var(--scm-theme-shadow) !important;
+            color: var(--scm-text) !important;
+        }}
+
+        .metric-value,
+        .metric-value-sm,
+        .section-heading .title {{
+            color: var(--scm-text) !important;
+        }}
+
+        .metric-title,
+        .metric-header,
+        .metric-footnote,
+        .section-heading .subtitle {{
+            color: var(--scm-muted) !important;
+        }}
+
+        div[data-baseweb="select"] > div,
+        div[data-baseweb="input"] > div,
+        div[data-baseweb="textarea"] > div {{
+            background: var(--scm-input-bg) !important;
+            border-color: var(--scm-border) !important;
+            color: var(--scm-text) !important;
+        }}
+
+        div[data-baseweb="select"] *,
+        div[data-baseweb="input"] *,
+        div[data-baseweb="textarea"] * {{
+            color: var(--scm-text) !important;
+        }}
+
+        [data-baseweb="popover"] [role="listbox"],
+        [data-baseweb="popover"] ul {{
+            background: var(--scm-surface) !important;
+            color: var(--scm-text) !important;
+        }}
+
+        [data-baseweb="popover"] [role="option"] {{
+            color: var(--scm-text) !important;
+        }}
+
+        [data-baseweb="popover"] [role="option"]:hover {{
+            background: var(--scm-hover) !important;
+        }}
+
+        button[data-baseweb="tab"] {{
+            color: var(--scm-muted) !important;
+        }}
+
+        button[data-baseweb="tab"][aria-selected="true"] {{
+            color: var(--scm-text) !important;
+        }}
+
+        [data-testid="stExpander"] {{
+            background: var(--scm-card-bg) !important;
+            border-color: var(--scm-border) !important;
+            color: var(--scm-text) !important;
+        }}
+
+        .pareto-html-shell {{
+            background: var(--scm-card-bg) !important;
+            border-color: var(--scm-border) !important;
+        }}
+
+        .pareto-html-table {{
+            color: var(--scm-text) !important;
+        }}
+
+        .pareto-html-table thead th {{
+            color: var(--scm-muted) !important;
+            background: var(--scm-table-head) !important;
+            border-bottom-color: var(--scm-border) !important;
+        }}
+
+        .pareto-html-table tbody td {{
+            color: var(--scm-text) !important;
+            border-bottom-color: var(--scm-soft-border) !important;
+        }}
+
+        .pareto-html-table tbody tr:hover {{
+            background: var(--scm-hover) !important;
+        }}
+
+        .status-strip {{
+            background: var(--scm-card-bg) !important;
+            border-color: var(--scm-border) !important;
+        }}
+
+        .status-pill,
+        .info-chip,
+        .pareto-count,
+        .pareto-status {{
+            border-color: var(--scm-border) !important;
+        }}
+
+        hr {{
+            border-top-color: var(--scm-border) !important;
+        }}
+
+        [data-testid="stDialog"] [role="dialog"] {{
+            background: var(--scm-surface) !important;
+            color: var(--scm-text) !important;
+        }}
+
+        div[data-testid="stDialog"] [data-testid="stFileUploader"] section {{
+            background: var(--scm-surface-2) !important;
+        }}
+
+        .import-dialog-note {{
+            background: var(--scm-surface-2) !important;
+            border-color: var(--scm-border) !important;
+            color: var(--scm-muted) !important;
+        }}
+
+        .scm-theme-control-label {{
+            margin: 0 0 0.28rem 0;
+            color: var(--scm-muted);
+            font-size: 0.60rem;
+            font-weight: 850;
+            line-height: 1.1;
+            letter-spacing: 0.10em;
+            text-transform: uppercase;
+            text-align: right;
+        }}
+
+        .st-key-scm_theme_light button,
+        .st-key-scm_theme_dark button {{
+            min-height: 36px !important;
+            height: 36px !important;
+            padding: 0.25rem 0.65rem !important;
+            border-radius: 10px !important;
+            border: 1px solid var(--scm-border) !important;
+            background: var(--scm-surface) !important;
+            color: var(--scm-text) !important;
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06) !important;
+            font-size: 0.72rem !important;
+            font-weight: 850 !important;
+            white-space: nowrap !important;
+        }}
+
+        .st-key-scm_theme_light button:hover,
+        .st-key-scm_theme_dark button:hover {{
+            border-color: rgba(99, 102, 241, 0.55) !important;
+            background: var(--scm-hover) !important;
+            transform: translateY(-1px);
+        }}
+
+        .st-key-scm_theme_light button[kind="primary"],
+        .st-key-scm_theme_dark button[kind="primary"] {{
+            background: linear-gradient(
+                135deg,
+                rgba(79,70,229,0.98),
+                rgba(37,99,235,0.96)
+            ) !important;
+            border-color: rgba(99, 102, 241, 0.72) !important;
+            color: #ffffff !important;
+            box-shadow: 0 7px 18px rgba(37, 99, 235, 0.18) !important;
+        }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+theme_space, theme_light_col, theme_dark_col = st.columns(
+    [10.0, 1.0, 1.0],
+    gap="small",
+)
+
+with theme_space:
+    st.markdown(
+        "<div class='scm-theme-control-label'>Display Theme</div>",
+        unsafe_allow_html=True,
+    )
+
+with theme_light_col:
+    st.button(
+        "☀️ Light",
+        key="scm_theme_light",
+        type="primary" if SCM_THEME == "light" else "secondary",
+        use_container_width=True,
+        on_click=set_scm_theme,
+        args=("light",),
+    )
+
+with theme_dark_col:
+    st.button(
+        "🌙 Dark",
+        key="scm_theme_dark",
+        type="primary" if SCM_THEME == "dark" else "secondary",
+        use_container_width=True,
+        on_click=set_scm_theme,
+        args=("dark",),
+    )
+
 
 st.markdown(
     """
@@ -1356,7 +1696,7 @@ def create_styled_line_chart(
             font=dict(size=14, color="#94a3b8"),
         )
         fig.update_layout(
-            template="plotly",
+            template=PLOTLY_TEMPLATE,
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             height=350,
@@ -1607,16 +1947,16 @@ def create_styled_line_chart(
         )
 
     fig.update_layout(
-        template="plotly",
+        template=PLOTLY_TEMPLATE,
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         height=365,
         margin=dict(t=82, b=44, l=46, r=20),
         hovermode="closest",
         hoverlabel=dict(
-            bgcolor="#0f172a",
-            bordercolor="rgba(148,163,184,0.28)",
-            font=dict(color="#f8fafc", size=11),
+            bgcolor=PLOTLY_HOVER_BG,
+            bordercolor=PLOTLY_HOVER_BORDER,
+            font=dict(color=PLOTLY_HOVER_TEXT, size=11),
         ),
         showlegend=True,
         legend=dict(
@@ -2078,7 +2418,7 @@ with tab_inventory:
                 x="Area",
                 y="Average Stock Out Rate",
                 text="Average Stock Out Rate",
-                template="plotly",
+                template=PLOTLY_TEMPLATE,
                 title="Average Stock Out Rate per Area",
             )
 
@@ -2106,9 +2446,9 @@ with tab_inventory:
                 bargap=0.28,
                 title=dict(x=0.02, xanchor="left", font=dict(size=16)),
                 hoverlabel=dict(
-                    bgcolor="#0f172a",
-                    bordercolor="rgba(148,163,184,0.28)",
-                    font=dict(color="#f8fafc", size=11),
+                    bgcolor=PLOTLY_HOVER_BG,
+                    bordercolor=PLOTLY_HOVER_BORDER,
+                    font=dict(color=PLOTLY_HOVER_TEXT, size=11),
                 ),
                 xaxis=dict(
                     title="",
@@ -2138,7 +2478,7 @@ with tab_inventory:
                 x="Area",
                 y="Class A Stock Out Rate",
                 text="Class A Stock Out Rate",
-                template="plotly",
+                template=PLOTLY_TEMPLATE,
                 title="Class A Stock Out Rate per Area",
                 custom_data=["Class A Stock Out Count", "Class A Total Stock Status Count"],
             )
@@ -2169,9 +2509,9 @@ with tab_inventory:
                 bargap=0.28,
                 title=dict(x=0.02, xanchor="left", font=dict(size=16)),
                 hoverlabel=dict(
-                    bgcolor="#0f172a",
-                    bordercolor="rgba(148,163,184,0.28)",
-                    font=dict(color="#f8fafc", size=11),
+                    bgcolor=PLOTLY_HOVER_BG,
+                    bordercolor=PLOTLY_HOVER_BORDER,
+                    font=dict(color=PLOTLY_HOVER_TEXT, size=11),
                 ),
                 xaxis=dict(
                     title="",
@@ -2326,7 +2666,7 @@ with tab_inventory:
                     y="Branch Display",
                     orientation="h",
                     text="Class A Stock Out Rate",
-                    template="plotly",
+                    template=PLOTLY_TEMPLATE,
                     title=f"Top {len(high_class_a_branches)} Highest Class A Stock Out Rate",
                     custom_data=[
                         "area",
@@ -2362,9 +2702,9 @@ with tab_inventory:
                     bargap=0.28,
                     title=dict(x=0.02, xanchor="left", font=dict(size=16)),
                     hoverlabel=dict(
-                        bgcolor="#0f172a",
-                        bordercolor="rgba(148,163,184,0.28)",
-                        font=dict(color="#f8fafc", size=11),
+                        bgcolor=PLOTLY_HOVER_BG,
+                        bordercolor=PLOTLY_HOVER_BORDER,
+                        font=dict(color=PLOTLY_HOVER_TEXT, size=11),
                     ),
                     xaxis=dict(
                         title="Class A Stockout Rate",
@@ -2404,7 +2744,7 @@ with tab_inventory:
                     y="Branch Display",
                     orientation="h",
                     text="Zero Rate Label",
-                    template="plotly",
+                    template=PLOTLY_TEMPLATE,
                     title=f"Top {len(zero_class_a_branches)} Branches with 0% Class A Stock Out Rate",
                     custom_data=[
                         "area",
@@ -2440,9 +2780,9 @@ with tab_inventory:
                     bargap=0.28,
                     title=dict(x=0.02, xanchor="left", font=dict(size=16)),
                     hoverlabel=dict(
-                        bgcolor="#0f172a",
-                        bordercolor="rgba(148,163,184,0.28)",
-                        font=dict(color="#f8fafc", size=11),
+                        bgcolor=PLOTLY_HOVER_BG,
+                        bordercolor=PLOTLY_HOVER_BORDER,
+                        font=dict(color=PLOTLY_HOVER_TEXT, size=11),
                     ),
                     xaxis=dict(
                         title="Class A Stock Status Coverage Count",
