@@ -13,7 +13,7 @@ from datetime import date, datetime
 from urllib.parse import quote
 
 # Presentation export dependencies. Keep these imports isolated so the dashboard
-# can still start and display normally when the optional export packages are not
+# can still start and display normally when the optional export package is not
 # installed; the Export Presentation action will show the exact dependency needed.
 try:
     from pptx import Presentation
@@ -25,13 +25,17 @@ try:
 except Exception:
     PPTX_EXPORT_AVAILABLE = False
 
+# Static chart export for PowerPoint is rendered locally with Matplotlib.
+# This intentionally avoids Kaleido/Chrome so the Streamlit deployment does not
+# need a browser binary just to generate presentation slides.
 try:
-    import plotly.io as pio
-    import importlib.util
-    KALEIDO_AVAILABLE = importlib.util.find_spec("kaleido") is not None
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    MATPLOTLIB_AVAILABLE = True
 except Exception:
-    pio = None
-    KALEIDO_AVAILABLE = False
+    plt = None
+    MATPLOTLIB_AVAILABLE = False
 
 
 # =========================================================
@@ -2655,13 +2659,289 @@ def ppt_add_image(slide, image_bytes, x, y, w, h):
     slide.shapes.add_picture(io.BytesIO(image_bytes), x, y, width=w, height=h)
 
 
+def _mpl_hex(value, fallback="#94a3b8"):
+    """Normalize Plotly/hex colors for the Matplotlib presentation renderer."""
+    if value is None:
+        return fallback
+    text = str(value).strip()
+    if text.startswith("rgba"):
+        # Simple rgba(r,g,b,a) -> rgb conversion for chart tokens.
+        try:
+            inside = text[text.index("(") + 1:text.rindex(")")]
+            parts = [p.strip() for p in inside.split(",")]
+            r, g, b = [int(float(parts[i])) for i in range(3)]
+            return "#{:02x}{:02x}{:02x}".format(r, g, b)
+        except Exception:
+            return fallback
+    if text.lower() == "transparent":
+        return fallback
+    return text
+
+
+def _clean_plotly_text(value):
+    """Convert basic Plotly HTML title fragments to plain presentation text."""
+    if value is None:
+        return ""
+    text = str(value)
+    text = text.replace("<br>", "\n").replace("<br/>", "\n")
+    import re
+    text = re.sub(r"<[^>]+>", "", text)
+    return text.strip()
+
+
+def _plotly_trace_color(trace, default="#6366f1"):
+    """Read the visible line/bar color from a Plotly trace."""
+    marker = getattr(trace, "marker", None)
+    if marker is not None:
+        color = getattr(marker, "color", None)
+        if isinstance(color, str):
+            return _mpl_hex(color, default)
+    line = getattr(trace, "line", None)
+    if line is not None:
+        color = getattr(line, "color", None)
+        if isinstance(color, str):
+            return _mpl_hex(color, default)
+    return default
+
+
 def ppt_figure_png(fig, width=1500, height=820):
-    if not PPTX_EXPORT_AVAILABLE or not KALEIDO_AVAILABLE or pio is None:
+    """
+    Render an existing Plotly figure to PNG without Kaleido or Chrome.
+
+    The dashboard continues to build the figure with its existing Plotly logic;
+    this renderer translates the resulting trace data into a PowerPoint-ready
+    static image. It supports the line and bar charts used by the SCM deck,
+    including labels, fills, axes, titles, categories, and executive colors.
+    """
+    if not PPTX_EXPORT_AVAILABLE:
         raise RuntimeError(
-            "PowerPoint export requires the packages 'python-pptx' and 'kaleido'. "
-            "Add both to requirements.txt and redeploy."
+            "PowerPoint export requires the package 'python-pptx'. "
+            "Add it to requirements.txt and redeploy."
         )
-    return pio.to_image(fig, format="png", width=width, height=height, scale=1)
+    if not MATPLOTLIB_AVAILABLE or plt is None:
+        raise RuntimeError(
+            "PowerPoint chart rendering requires the package 'matplotlib'. "
+            "Add it to requirements.txt and redeploy."
+        )
+
+    dpi = 150
+    fig_w = width / dpi
+    fig_h = height / dpi
+    mpl_fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=dpi)
+
+    dark = SCM_IS_DARK
+    bg = "#070b14" if dark else "#f6f8fc"
+    panel = "#0f172a" if dark else "#ffffff"
+    text_color = "#f8fafc" if dark else "#0f172a"
+    muted = "#94a3b8" if dark else "#64748b"
+    grid = "#334155" if dark else "#e2e8f0"
+
+    mpl_fig.patch.set_facecolor(panel)
+    ax.set_facecolor(panel)
+
+    traces = list(getattr(fig, "data", []) or [])
+    orientation = "v"
+    try:
+        orientation = getattr(traces[0], "orientation", None) or "v"
+    except Exception:
+        pass
+
+    rendered = False
+    category_values = None
+
+    for trace in traces:
+        trace_type = str(getattr(trace, "type", "")).lower()
+        raw_x = getattr(trace, "x", None)
+        raw_y = getattr(trace, "y", None)
+        x = raw_x.tolist() if hasattr(raw_x, "tolist") else list(raw_x) if raw_x is not None else []
+        y = raw_y.tolist() if hasattr(raw_y, "tolist") else list(raw_y) if raw_y is not None else []
+        color = _plotly_trace_color(trace, "#6366f1")
+        trace_name = str(getattr(trace, "name", "") or "")
+        raw_text = getattr(trace, "text", None)
+        text_values = raw_text.tolist() if hasattr(raw_text, "tolist") else list(raw_text) if raw_text is not None and not isinstance(raw_text, str) else ([raw_text] if isinstance(raw_text, str) else [])
+
+        if trace_type == "scatter":
+            mode = str(getattr(trace, "mode", "lines") or "lines")
+            # Plotly stores category dates as strings in the chart function.
+            x_labels = [str(v) for v in x]
+            x_pos = list(range(len(x_labels)))
+            y_num = pd.to_numeric(pd.Series(y), errors="coerce").tolist()
+            line_color = color
+            ax.plot(
+                x_pos,
+                y_num,
+                color=line_color,
+                linewidth=2.4,
+                marker="o" if "markers" in mode else None,
+                markersize=5,
+                label=trace_name if trace_name else None,
+                zorder=4,
+            )
+
+            fill_value = getattr(trace, "fill", None)
+            if fill_value in {"tozeroy", "tonexty"}:
+                baseline = [0] * len(y_num)
+                ax.fill_between(
+                    x_pos,
+                    baseline,
+                    y_num,
+                    color=line_color,
+                    alpha=0.12,
+                    zorder=2,
+                )
+
+            category_values = x_labels
+            rendered = True
+
+        elif trace_type == "bar":
+            marker_color = color
+            ori = str(getattr(trace, "orientation", None) or orientation or "v").lower()
+            if ori == "h":
+                categories = [str(v) for v in y]
+                values = pd.to_numeric(pd.Series(x), errors="coerce").fillna(0).tolist()
+                positions = list(range(len(categories)))
+                ax.barh(
+                    positions,
+                    values,
+                    color=marker_color,
+                    height=0.62,
+                    alpha=0.96,
+                    zorder=3,
+                )
+                ax.set_yticks(positions)
+                ax.set_yticklabels(categories)
+                ax.invert_yaxis()
+                category_values = categories
+                if text_values:
+                    for i, value in enumerate(values):
+                        label = text_values[i] if i < len(text_values) else value
+                        ax.text(
+                            value,
+                            i,
+                            f"  {label}",
+                            va="center",
+                            ha="left",
+                            fontsize=9,
+                            fontweight="bold",
+                            color=text_color,
+                            clip_on=False,
+                        )
+            else:
+                categories = [str(v) for v in x]
+                values = pd.to_numeric(pd.Series(y), errors="coerce").fillna(0).tolist()
+                positions = list(range(len(categories)))
+                ax.bar(
+                    positions,
+                    values,
+                    color=marker_color,
+                    width=0.62,
+                    alpha=0.96,
+                    zorder=3,
+                )
+                ax.set_xticks(positions)
+                ax.set_xticklabels(categories)
+                category_values = categories
+                if text_values:
+                    for i, value in enumerate(values):
+                        label = text_values[i] if i < len(text_values) else value
+                        ax.text(
+                            i,
+                            value,
+                            f"{label}",
+                            va="bottom",
+                            ha="center",
+                            fontsize=9,
+                            fontweight="bold",
+                            color=text_color,
+                            clip_on=False,
+                        )
+            rendered = True
+
+    # Reproduce the dashboard axis ranges/titles where possible.
+    layout = getattr(fig, "layout", None)
+    title_obj = getattr(layout, "title", None) if layout is not None else None
+    title_text = _clean_plotly_text(getattr(title_obj, "text", "") if title_obj is not None else "")
+    if title_text:
+        ax.set_title(
+            title_text,
+            loc="left",
+            color=text_color,
+            fontsize=14,
+            fontweight="bold",
+            pad=18,
+        )
+
+    xaxis = getattr(layout, "xaxis", None) if layout is not None else None
+    yaxis = getattr(layout, "yaxis", None) if layout is not None else None
+
+    if orientation == "h":
+        value_axis = xaxis
+        category_axis = yaxis
+    else:
+        category_axis = xaxis
+        value_axis = yaxis
+
+    value_title = getattr(getattr(value_axis, "title", None), "text", "") if value_axis is not None else ""
+    if value_title:
+        if orientation == "h":
+            ax.set_xlabel(_clean_plotly_text(value_title), color=muted, fontsize=9)
+        else:
+            ax.set_ylabel(_clean_plotly_text(value_title), color=muted, fontsize=9)
+
+    # Preserve category labels generated by the live Plotly figure.
+    if orientation != "h" and category_values is not None:
+        ax.set_xticks(range(len(category_values)))
+        ax.set_xticklabels(category_values)
+        ax.tick_params(axis="x", labelrotation=0)
+
+    # Preserve the intended numeric upper bounds from Plotly.
+    axis_range = getattr(value_axis, "range", None) if value_axis is not None else None
+    if axis_range and len(axis_range) == 2:
+        try:
+            lo, hi = float(axis_range[0]), float(axis_range[1])
+            if np.isfinite(lo) and np.isfinite(hi) and hi > lo:
+                if orientation == "h":
+                    ax.set_xlim(lo, hi)
+                else:
+                    ax.set_ylim(lo, hi)
+        except Exception:
+            pass
+
+    # Executive axis/grid treatment.
+    ax.grid(axis="y" if orientation != "h" else "x", color=grid, alpha=0.42, linewidth=0.7)
+    ax.grid(axis="x" if orientation != "h" else "y", visible=False)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    ax.tick_params(colors=muted, labelsize=8.5, length=0, pad=4)
+
+    # Match percentage axes from dashboard charts.
+    tickformat = str(getattr(value_axis, "tickformat", "") or "") if value_axis is not None else ""
+    if tickformat in {".0%", "0%", ".1%"}:
+        import matplotlib.ticker as mticker
+        ax.yaxis.set_major_formatter(mticker.PercentFormatter(xmax=100, decimals=0)) if orientation != "h" else ax.xaxis.set_major_formatter(mticker.PercentFormatter(xmax=100, decimals=0))
+
+    handles, labels = ax.get_legend_handles_labels()
+    if handles and any(labels):
+        ax.legend(
+            loc="upper right",
+            frameon=False,
+            fontsize=8,
+            labelcolor=muted,
+        )
+
+    mpl_fig.subplots_adjust(left=0.10, right=0.97, top=0.85, bottom=0.17)
+    output = io.BytesIO()
+    mpl_fig.savefig(
+        output,
+        format="png",
+        dpi=dpi,
+        facecolor=panel,
+        edgecolor=panel,
+        bbox_inches="tight",
+        pad_inches=0.12,
+    )
+    plt.close(mpl_fig)
+    return output.getvalue()
 
 
 def ppt_add_table(slide, df, x, y, w, h, title, colors=None, font_size=7.4):
@@ -3360,9 +3640,9 @@ with tab_inventory:
         )
 
     if export_clicked:
-        if not PPTX_EXPORT_AVAILABLE or not KALEIDO_AVAILABLE:
+        if not PPTX_EXPORT_AVAILABLE or not MATPLOTLIB_AVAILABLE:
             st.error(
-                "Presentation export requires `python-pptx` and `kaleido`. "
+                "Presentation export requires `python-pptx` and `matplotlib`. "
                 "Add both packages to requirements.txt, then redeploy the Streamlit app."
             )
         else:
