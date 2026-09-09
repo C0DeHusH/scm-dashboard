@@ -1161,6 +1161,42 @@ st.markdown(
             background: rgba(99,102,241,0.055) !important;
         }
 
+        /* -------------------------------------------------
+           EXPORT BUTTON CSS ALIGNMENT TO TABS
+           ------------------------------------------------- */
+        .st-key-export_scm_presentation_action {
+            position: absolute !important;
+            right: clamp(0.5rem, 2vw, 1.5rem);
+            top: -3.5rem;
+            z-index: 999;
+            width: auto !important;
+        }
+        
+        .st-key-export_scm_presentation_action button {
+            border-radius: 8px !important;
+            border: 1px solid rgba(99, 102, 241, 0.45) !important;
+            background: rgba(99, 102, 241, 0.12) !important;
+            font-size: 0.74rem !important;
+            font-weight: 850 !important;
+            padding: 0.35rem 0.85rem !important;
+            min-height: 36px !important;
+            color: var(--scm-text) !important;
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08) !important;
+            transition: all 150ms ease !important;
+        }
+        
+        .st-key-export_scm_presentation_action button:hover {
+            background: rgba(99, 102, 241, 0.22) !important;
+            border-color: rgba(99, 102, 241, 0.7) !important;
+            transform: translateY(-1px);
+        }
+        
+        @media (max-width: 768px) {
+            .st-key-export_scm_presentation_action {
+                top: -3.2rem;
+            }
+        }
+
         @media (max-width: 900px) {
             .trend-heading-inline {
                 min-height: 46px;
@@ -3407,6 +3443,36 @@ def cached_scm_presentation(workbook_bytes, selected_area, theme_name):
 tab_inventory, tab_procurements = st.tabs(["📊 Inventory Control Tower", "📦 Procurements"])
 
 with tab_inventory:
+    # ---------------------------------------------------------
+    # ABSOLUTE POSITIONED EXPORT BUTTON — ALIGNED RIGHT OF TABS
+    # ---------------------------------------------------------
+    current_area_for_export = st.session_state.get("selected_scm_area_for_export", "All Areas")
+    
+    # We only render the export action if data has successfully loaded
+    if saved_workbook_bytes is not None:
+        if st.button("📊 Export Presentation", key="export_scm_presentation_action", help="Download the prepared PowerPoint presentation."):
+            # We omit the spinner entirely as requested to prevent "message generating" displays
+            presentation_bytes = cached_scm_presentation(
+                saved_workbook_bytes,
+                current_area_for_export,
+                SCM_THEME,
+            )
+            presentation_name = f"SCM_Control_Tower_{str(current_area_for_export).replace(' ', '_').replace('/', '-')}_Presentation.pptx"
+            b64 = base64.b64encode(presentation_bytes).decode()
+            dl_link = f"""
+            <script>
+                var a = document.createElement('a');
+                a.href = 'data:application/vnd.openxmlformats-officedocument.presentationml.presentation;base64,{b64}';
+                a.download = '{presentation_name}';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            </script>
+            """
+            # Assigning to `_` ensures no "None" text is ever echoed to the UI.
+            _ = components.html(dl_link, width=0, height=0)
+
+
     # =========================================================
     # 4A. MUTI MC TRENDS HEADER
     # =========================================================
@@ -3665,14 +3731,14 @@ with tab_inventory:
         )
 
     # =========================================================
-    # DATA ACTIONS — IMPORT POPUP + DIRECT POWERPOINT DOWNLOAD
+    # DATA ACTIONS — IMPORT POPUP
     # =========================================================
     action_col, action_note_col = st.columns([1.55, 4.45], gap="small", vertical_alignment="center")
 
     with action_col:
         with st.popover("Data Actions ▾", width="stretch"):
             st.markdown(
-                "<div style='font-weight:850; font-size:0.78rem; color:var(--scm-muted); margin-bottom:0.45rem;'>WORKBOOK & PRESENTATION</div>",
+                "<div style='font-weight:850; font-size:0.78rem; color:var(--scm-muted); margin-bottom:0.45rem;'>WORKBOOK SYNCHRONIZATION</div>",
                 unsafe_allow_html=True,
             )
 
@@ -3685,36 +3751,10 @@ with tab_inventory:
             ):
                 data_sync_dialog()
 
-            # The presentation is prepared on-demand and triggers an automatic browser download.
-            if st.button(
-                "📊 Export Presentation",
-                width="stretch",
-                key="export_scm_presentation_action",
-                help="Download the prepared PowerPoint presentation. YTD/Weekly trends are included; detailed model slides are Class A only and Greatwall is excluded from the presentation.",
-            ):
-                with st.spinner("Generating presentation..."):
-                    presentation_bytes = cached_scm_presentation(
-                        saved_workbook_bytes,
-                        selected_area,
-                        SCM_THEME,
-                    )
-                    presentation_name = (
-                        f"SCM_Control_Tower_{str(selected_area).replace(' ', '_').replace('/', '-')}_Presentation.pptx"
-                    )
-                    b64 = base64.b64encode(presentation_bytes).decode()
-                    dl_link = f"""
-                    <a id="auto-download" href="data:application/vnd.openxmlformats-officedocument.presentationml.presentation;base64,{b64}" download="{presentation_name}"></a>
-                    <script>
-                        document.getElementById('auto-download').click();
-                    </script>
-                    """
-                    components.html(dl_link, height=0)
-
-
     with action_note_col:
         st.markdown(
             "<div style='padding-top:10px; color:var(--scm-muted); font-size:0.76rem;'>"
-            "Data Sync opens the Excel import field. Export Presentation generates and automatically downloads the prepared PowerPoint for the selected network scope."
+            "Data Sync opens the Excel import field. The Export Presentation action is available at the top right of the dashboard tabs."
             "</div>",
             unsafe_allow_html=True,
         )
