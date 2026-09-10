@@ -683,7 +683,7 @@ def admin_login_dialog():
     with c2:
         if st.button("Login", type="primary", use_container_width=True):
             # Fallback admin password is "admin". Can be overridden in secrets.toml
-            expected = str(_secret("ADMIN_PASSWORD", "admin")) 
+            expected = str(_secret("ADMIN_PASSWORD", "112214")) 
             if pwd == expected:
                 st.session_state["is_admin_logged_in"] = True
                 st.rerun()
