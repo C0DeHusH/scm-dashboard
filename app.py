@@ -360,7 +360,6 @@ st.set_page_config(
 
 # =========================================================
 # 1A. CUSTOM LIGHT / DARK THEME CONTROL
-#     UI-only enhancement. Dashboard calculations and data logic are unchanged.
 # =========================================================
 if "scm_theme" not in st.session_state:
     # Keep the current executive appearance as the default.
@@ -873,21 +872,29 @@ st.markdown(
             align-content: center;
         }
 
-        /* EXECUTIVE KPI CARDS */
+        /* EXECUTIVE KPI CARDS - ENHANCED */
         .metric-card,
         .metric-card-base {
             position: relative;
             box-sizing: border-box;
             width: 100%;
             min-width: 0;
-            min-height: 120px;
+            min-height: 125px;
             height: 100%;
-            padding: 15px 17px;
+            padding: 18px 20px;
             border: 1px solid var(--scm-border);
-            border-radius: 15px;
-            background: rgba(148, 163, 184, 0.025);
-            box-shadow: 0 7px 20px rgba(15, 23, 42, 0.045);
+            border-radius: 16px;
+            background: linear-gradient(145deg, rgba(148, 163, 184, 0.02), rgba(148, 163, 184, 0.05));
+            box-shadow: 0 4px 15px rgba(15, 23, 42, 0.03);
             overflow: hidden;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .metric-card:hover,
+        .metric-card-base:hover {
+            transform: translateY(-4px) scale(1.01);
+            box-shadow: 0 15px 35px rgba(99, 102, 241, 0.12), 0 5px 15px rgba(0, 0, 0, 0.06);
+            border-color: rgba(99, 102, 241, 0.4) !important;
         }
 
         .metric-card::before,
@@ -897,9 +904,16 @@ st.markdown(
             left: 0;
             top: 0;
             bottom: 0;
-            width: 3px;
+            width: 4px;
             background: var(--scm-indigo);
-            opacity: 0.90;
+            opacity: 0.95;
+            transition: width 0.2s ease;
+        }
+
+        .metric-card:hover::before,
+        .metric-card-base:hover::before {
+            width: 6px;
+            box-shadow: 2px 0 8px rgba(99, 102, 241, 0.5);
         }
 
         .metric-card-base {
@@ -2071,24 +2085,24 @@ def apply_executive_bar_style(
     height=425,
     right_margin=28,
 ):
-    """Apply one consistent executive visual system to bar charts."""
+    """Apply one consistent executive visual system to bar charts with 3D depth."""
     _ = fig.update_traces(
         marker=dict(
             color=accent_color,
-            line=dict(color=accent_color, width=0),
+            line=dict(color="rgba(255, 255, 255, 0.15)", width=1.5),
         ),
-        opacity=0.96,
-        textfont=dict(size=12, color=PLOTLY_CHART_TEXT),
+        opacity=0.92,
+        textfont=dict(size=13, color=PLOTLY_CHART_TEXT, family="Arial", weight="bold"),
         cliponaxis=False,
     )
 
     value_axis = dict(
-        title=dict(text=value_axis_title, font=dict(size=11, color=PLOTLY_CHART_MUTED)),
+        title=dict(text=value_axis_title, font=dict(size=12, color=PLOTLY_CHART_MUTED)),
         range=[0, value_max],
         gridcolor=PLOTLY_CHART_GRID,
         zeroline=False,
         showline=False,
-        tickfont=dict(size=10, color=PLOTLY_CHART_MUTED),
+        tickfont=dict(size=11, color=PLOTLY_CHART_MUTED),
         automargin=True,
     )
     if percent:
@@ -2102,7 +2116,7 @@ def apply_executive_bar_style(
         showgrid=False,
         showline=True,
         linecolor=PLOTLY_CHART_AXIS,
-        tickfont=dict(size=10, color=PLOTLY_CHART_MUTED),
+        tickfont=dict(size=11, color=PLOTLY_CHART_MUTED),
         automargin=True,
     )
 
@@ -2122,7 +2136,7 @@ def apply_executive_bar_style(
         height=height,
         margin=dict(t=76, b=52, l=42 if orientation == "v" else 20, r=right_margin),
         showlegend=False,
-        bargap=0.34 if orientation == "v" else 0.30,
+        bargap=0.25 if orientation == "v" else 0.22,
         hovermode="closest",
         dragmode=False,
         font=dict(color=PLOTLY_CHART_TEXT),
@@ -2131,16 +2145,17 @@ def apply_executive_bar_style(
             xanchor="left",
             y=0.97,
             yanchor="top",
-            font=dict(size=16, color=PLOTLY_CHART_TEXT),
+            font=dict(size=17, color=PLOTLY_CHART_TEXT),
         ),
         hoverlabel=dict(
             bgcolor=PLOTLY_HOVER_BG,
-            bordercolor=PLOTLY_HOVER_BORDER,
-            font=dict(color=PLOTLY_HOVER_TEXT, size=11),
+            bordercolor=accent_color,
+            font=dict(color=PLOTLY_HOVER_TEXT, size=12),
         ),
-        uniformtext=dict(minsize=9, mode="hide"),
+        uniformtext=dict(minsize=10, mode="hide"),
         xaxis=xaxis,
         yaxis=yaxis,
+        transition=dict(duration=500, easing="cubic-in-out")
     )
     return fig
 
@@ -2195,26 +2210,15 @@ def create_styled_line_chart(
     if chart_df.empty:
         _ = fig.add_annotation(
             text="No valid data available for this KPI",
-            x=0.5,
-            y=0.5,
-            xref="paper",
-            yref="paper",
-            showarrow=False,
-            font=dict(size=14, color="#94a3b8"),
+            x=0.5, y=0.5, xref="paper", yref="paper",
+            showarrow=False, font=dict(size=14, color="#94a3b8"),
         )
         _ = fig.update_layout(
             template=PLOTLY_TEMPLATE,
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            height=350,
-            margin=dict(t=72, b=34, l=42, r=20),
-            title=dict(
-                text=f"{title}<br><span style='font-size:10px'>{subtitle}</span>",
-                x=0.02,
-                xanchor="left",
-            ),
-            xaxis=dict(visible=False),
-            yaxis=dict(visible=False),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            height=350, margin=dict(t=72, b=34, l=42, r=20),
+            title=dict(text=f"{title}<br><span style='font-size:10px'>{subtitle}</span>", x=0.02, xanchor="left"),
+            xaxis=dict(visible=False), yaxis=dict(visible=False),
         )
         return fig
 
@@ -2222,34 +2226,17 @@ def create_styled_line_chart(
 
     if is_percentage:
         scale = infer_percentage_scale(plot_y)
-        # Convert to percentage points, apply standard half-up rounding,
-        # then convert back to a Plotly fraction.
-        # Example: 8.4% -> 8%, 8.5% -> 9%.
         percentage_points = (plot_y * scale) * 100.0
-        rounded_percentage_points = round_series_half_up(percentage_points)
-        plot_y = rounded_percentage_points / 100.0
+        plot_y = round_series_half_up(percentage_points) / 100.0
         text_labels = [f"{v * 100:.0f}%" for v in plot_y]
         tick_format = ".0%"
         default_ceiling = 0.10
     else:
-        # DOI and other numeric KPIs use standard half-up rounding.
         plot_y = round_series_half_up(plot_y).astype(int)
         text_labels = [f"{v:,.0f}" for v in plot_y]
         tick_format = ",.0f"
         default_ceiling = 10
 
-    # -----------------------------------------------------
-    # X-AXIS BEHAVIOR
-    # -----------------------------------------------------
-    # Weekly View:
-    #   Use a categorical axis based only on dates that have data.
-    #   Plotly therefore cannot display dates between observations.
-    #
-    # YTD View:
-    #   Use month categories ordered Jan -> Dec.
-    #   This guarantees January is the first visible month whenever
-    #   a January KPI point exists in the source workbook.
-    # -----------------------------------------------------
     if is_weekly:
         chart_x = chart_df["period"].dt.strftime("%d %b %Y")
         tick_text = chart_df["period"].dt.strftime("%d %b")
@@ -2257,77 +2244,43 @@ def create_styled_line_chart(
     else:
         chart_x = chart_df["period"].dt.strftime("%b")
         tick_text = chart_x.tolist()
-        category_array = [
-            "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-        ]
+        category_array = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
     hover_dates = chart_df["period"].dt.strftime("%d %b %Y")
-
-    if is_percentage:
-        hover_template = (
-            "<b>%{customdata}</b><br>"
-            f"{title}: <b>%{{y:.0%}}</b>"
-            "<extra></extra>"
-        )
-    else:
-        hover_template = (
-            "<b>%{customdata}</b><br>"
-            f"{title}: <b>%{{y:,.0f}}</b>"
-            "<extra></extra>"
-        )
-
     line_shape = "linear" if is_weekly else "spline"
 
-    fillcolor = None
-    if fill:
-        fillcolor = (
-            f"rgba({int(line_color[1:3], 16)}, "
-            f"{int(line_color[3:5], 16)}, "
-            f"{int(line_color[5:7], 16)}, 0.08)"
-        )
-
-    # Alternate data-label positions to reduce collisions when neighboring values are close.
-    text_positions = [
-        "top center" if index % 2 == 0 else "bottom center"
-        for index in range(len(chart_df))
-    ]
-
+    # 1. ADD BACKGROUND GLOW EFFECT
     _ = fig.add_trace(
         go.Scatter(
-            x=chart_x,
-            y=plot_y,
-            customdata=hover_dates,
-            name="Actual",
-            mode="lines+markers+text",
-            text=text_labels,
-            textposition=text_positions,
-            textfont=dict(size=10, family="Arial"),
-            line=dict(
-                shape=line_shape,
-                width=3.2,
-                dash="solid",
-                color=line_color,
-            ),
-            marker=dict(
-                size=8,
-                color=line_color,
-                line=dict(width=2, color="#ffffff"),
-            ),
-            fill="tozeroy" if fill else "none",
-            fillcolor=fillcolor,
-            hovertemplate=hover_template,
-            cliponaxis=False,
+            x=chart_x, y=plot_y,
+            mode="lines",
+            line=dict(shape=line_shape, width=8, color=line_color),
+            opacity=0.15,
+            hoverinfo="skip",
+            showlegend=False
         )
     )
 
-    # -----------------------------------------------------
-    # DIRECTION / TREND GUIDE — POSITIONED ABOVE ACTUAL
-    # -----------------------------------------------------
-    # The linear fit determines direction only. For presentation clarity, the
-    # dashed guide is vertically repositioned into a dedicated band above the
-    # highest Actual observation. This guarantees that it never crosses or
-    # obscures the measured KPI line and avoids implying a second KPI value.
+    # 2. MAIN TRACE
+    fillcolor = f"rgba({int(line_color[1:3], 16)}, {int(line_color[3:5], 16)}, {int(line_color[5:7], 16)}, 0.12)" if fill else "none"
+    text_positions = ["top center" if index % 2 == 0 else "bottom center" for index in range(len(chart_df))]
+    
+    hover_template = "<b>%{customdata}</b><br>" + (f"{title}: <b>%{{y:.0%}}</b>" if is_percentage else f"{title}: <b>%{{y:,.0f}}</b>") + "<extra></extra>"
+
+    _ = fig.add_trace(
+        go.Scatter(
+            x=chart_x, y=plot_y, customdata=hover_dates,
+            name="Actual", mode="lines+markers+text",
+            text=text_labels, textposition=text_positions,
+            textfont=dict(size=11, family="Arial", color=PLOTLY_CHART_TEXT),
+            line=dict(shape=line_shape, width=3.5, color=line_color),
+            marker=dict(size=9, color=line_color, line=dict(width=2, color=PLOTLY_HOVER_BG)),
+            fill="tozeroy" if fill else "none", fillcolor=fillcolor,
+            hovertemplate=hover_template, cliponaxis=False,
+        )
+    )
+
+    # 3. TREND DIRECTION GUIDE
     trend_y = None
     trend_direction = "Stable"
     if len(chart_df) >= 2:
@@ -2353,7 +2306,6 @@ def create_styled_line_chart(
             actual_min = float(np.nanmin(actual_valid))
             actual_span = max(actual_max - actual_min, 0.0)
 
-            # Minimum visual separation is unit-aware.
             minimum_gap = 0.010 if is_percentage else 1.0
             minimum_amplitude = 0.006 if is_percentage else 0.65
             gap = max(actual_span * 0.18, minimum_gap)
@@ -2367,7 +2319,6 @@ def create_styled_line_chart(
             else:
                 normalized_fit = np.full_like(fitted_y, 0.5, dtype=float)
 
-            # Entire dashed guide sits above the highest Actual point.
             trend_y = actual_max + gap + (normalized_fit * amplitude)
 
             fitted_delta = float(fitted_y[-1] - fitted_y[0])
@@ -2410,93 +2361,37 @@ def create_styled_line_chart(
         trend_max = np.nanmax(trend_y)
         if np.isfinite(trend_max):
             max_observed = max(max_observed, trend_max)
-    if pd.isna(max_observed) or max_observed <= 0:
-        y_max = default_ceiling
-    else:
-        # Keep enough breathing room above the separated trend guide without
-        # compressing the Actual series excessively.
-        y_max = max_observed * 1.16
-
-    if is_percentage:
-        y_max = max(y_max, 0.05)
-    else:
-        y_max = max(y_max, 5)
+    y_max = max(default_ceiling, max_observed * 1.16) if pd.notna(max_observed) and max_observed > 0 else default_ceiling
+    if is_percentage: y_max = max(y_max, 0.05)
+    else: y_max = max(y_max, 5)
 
     latest_period = chart_df["period"].max()
-    latest_text = (
-        latest_period.strftime("%d %b %Y")
-        if pd.notna(latest_period)
-        else "N/A"
-    )
+    latest_text = latest_period.strftime("%d %b %Y") if pd.notna(latest_period) else "N/A"
 
     xaxis_config = dict(
-        type="category",
-        showgrid=False,
-        categoryorder="array",
-        categoryarray=category_array,
-        tickangle=0,
-        linecolor="rgba(148,163,184,0.18)",
+        type="category", showgrid=False, categoryorder="array", categoryarray=category_array,
+        tickangle=0, linecolor="rgba(148,163,184,0.18)",
+        tickmode="array", tickvals=chart_x.tolist(), ticktext=tick_text.tolist() if is_weekly else tick_text,
+        # ADD CROSSHAIR SPIKES
+        showspikes=True, spikecolor=PLOTLY_CHART_MUTED, spikethickness=1, spikedash="dot", spikemode="across"
     )
-
-    if is_weekly:
-        # Exact observations only: no in-between dates.
-        _ = xaxis_config.update(
-            tickmode="array",
-            tickvals=chart_x.tolist(),
-            ticktext=tick_text.tolist(),
-        )
-    else:
-        # Jan-Dec month ordering; only months present in the data render.
-        _ = xaxis_config.update(
-            tickmode="array",
-            tickvals=chart_x.tolist(),
-            ticktext=tick_text,
-        )
 
     _ = fig.update_layout(
         template=PLOTLY_TEMPLATE,
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        height=365,
-        margin=dict(t=82, b=44, l=46, r=20),
-        hovermode="closest",
-        hoverlabel=dict(
-            bgcolor=PLOTLY_HOVER_BG,
-            bordercolor=PLOTLY_HOVER_BORDER,
-            font=dict(color=PLOTLY_HOVER_TEXT, size=11),
-        ),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        height=365, margin=dict(t=82, b=44, l=46, r=20),
+        # UNIFIED HOVER MODE
+        hovermode="x unified",
+        hoverlabel=dict(bgcolor=PLOTLY_HOVER_BG, bordercolor=PLOTLY_HOVER_BORDER, font=dict(color=PLOTLY_HOVER_TEXT, size=12)),
         showlegend=True,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.015,
-            xanchor="right",
-            x=0.99,
-            bgcolor="rgba(0,0,0,0)",
-            font=dict(size=10, color="#94a3b8"),
-        ),
+        legend=dict(orientation="h", yanchor="bottom", y=1.015, xanchor="right", x=0.99, bgcolor="rgba(0,0,0,0)", font=dict(size=10, color="#94a3b8")),
         title=dict(
-            text=(
-                f"{title}<br>"
-                f"<span style='font-size:10px; color:#94a3b8;'>"
-                f"{subtitle} • {len(chart_df)} DATA PERIOD(S) • LATEST {latest_text.upper()}"
-                f"</span>"
-            ),
-            x=0.02,
-            y=0.96,
-            xanchor="left",
-            yanchor="top",
-            font=dict(size=16, family="Arial"),
+            text=f"{title}<br><span style='font-size:10px; color:#94a3b8;'>{subtitle} • {len(chart_df)} DATA PERIOD(S) • LATEST {latest_text.upper()}</span>",
+            x=0.02, y=0.96, xanchor="left", yanchor="top", font=dict(size=17, family="Arial", color=PLOTLY_CHART_TEXT),
         ),
         xaxis=xaxis_config,
-        yaxis=dict(
-            showgrid=True,
-            gridwidth=1,
-            gridcolor="rgba(148,163,184,0.14)",
-            zeroline=False,
-            tickformat=tick_format,
-            range=[0, y_max],
-        ),
+        yaxis=dict(showgrid=True, gridwidth=1, gridcolor="rgba(148,163,184,0.1)", zeroline=False, tickformat=tick_format, range=[0, y_max]),
+        transition=dict(duration=500, easing="cubic-in-out")
     )
 
     return fig
@@ -2648,9 +2543,10 @@ def ppt_add_metric_card(slide, x, y, w, h, title, value, badge, accent, colors=N
     _ = card.fill.solid()
     card.fill.fore_color.rgb = ppt_rgb(colors["surface"])
     card.line.color.rgb = ppt_rgb(colors["border"])
-    card.line.width = Pt(0.8)
+    card.line.width = Pt(1.0) # Slightly thicker border to match CSS intensity
 
-    stripe = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, x, y, Inches(0.05), h)
+    # Enhanced accent stripe
+    stripe = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, x, y, Inches(0.08), h)
     _ = stripe.fill.solid()
     stripe.fill.fore_color.rgb = ppt_rgb(accent)
     _ = stripe.line.fill.background()
@@ -2671,7 +2567,7 @@ def ppt_add_metric_card(slide, x, y, w, h, title, value, badge, accent, colors=N
     vp = vf.paragraphs[0]
     vp.text = str(value)
     vp.font.name = "Aptos Display"
-    vp.font.size = Pt(24)
+    vp.font.size = Pt(26) # Boosted size for prominence
     vp.font.bold = True
     vp.font.color.rgb = ppt_rgb(colors["text"])
 
@@ -2791,18 +2687,23 @@ def ppt_figure_png(fig, width=1500, height=820):
         raw_text = getattr(trace, "text", None)
         text_values = raw_text.tolist() if hasattr(raw_text, "tolist") else list(raw_text) if raw_text is not None and not isinstance(raw_text, str) else ([raw_text] if isinstance(raw_text, str) else [])
 
+        # Sync visual upgrades: retrieve dynamic widths and opacity from the plotly trace
+        trace_opacity = float(getattr(trace, "opacity", 1.0) or 1.0)
+        line_width = float(getattr(getattr(trace, "line", None), "width", 2.4) or 2.4)
+
         if trace_type == "scatter":
             mode = str(getattr(trace, "mode", "lines") or "lines")
             # Plotly stores category dates as strings in the chart function.
             x_labels = [str(v) for v in x]
             x_pos = list(range(len(x_labels)))
             y_num = pd.to_numeric(pd.Series(y), errors="coerce").tolist()
-            line_color = color
+            
             _ = ax.plot(
                 x_pos,
                 y_num,
-                color=line_color,
-                linewidth=2.4,
+                color=color,
+                linewidth=line_width,
+                alpha=trace_opacity,
                 marker="o" if "markers" in mode else None,
                 markersize=5,
                 label=trace_name if trace_name else None,
@@ -2816,7 +2717,7 @@ def ppt_figure_png(fig, width=1500, height=820):
                     x_pos,
                     baseline,
                     y_num,
-                    color=line_color,
+                    color=color,
                     alpha=0.12,
                     zorder=2,
                 )
@@ -2835,8 +2736,10 @@ def ppt_figure_png(fig, width=1500, height=820):
                     positions,
                     values,
                     color=marker_color,
+                    edgecolor="#ffffff", # Added presentation 3D border sync
+                    linewidth=0.5,
                     height=0.62,
-                    alpha=0.96,
+                    alpha=trace_opacity,
                     zorder=3,
                 )
                 _ = ax.set_yticks(positions)
@@ -2865,8 +2768,10 @@ def ppt_figure_png(fig, width=1500, height=820):
                     positions,
                     values,
                     color=marker_color,
+                    edgecolor="#ffffff", # Added presentation 3D border sync
+                    linewidth=0.5,
                     width=0.62,
-                    alpha=0.96,
+                    alpha=trace_opacity,
                     zorder=3,
                 )
                 _ = ax.set_xticks(positions)
