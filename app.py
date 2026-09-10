@@ -2262,7 +2262,9 @@ def create_styled_line_chart(
     )
 
     # 2. MAIN TRACE
-    fillcolor = f"rgba({int(line_color[1:3], 16)}, {int(line_color[3:5], 16)}, {int(line_color[5:7], 16)}, 0.12)" if fill else "none"
+    # CORRECTED: Plotly strictly requires the Python `None` object here, not the string "none"
+    fillcolor = f"rgba({int(line_color[1:3], 16)}, {int(line_color[3:5], 16)}, {int(line_color[5:7], 16)}, 0.12)" if fill else None
+    
     text_positions = ["top center" if index % 2 == 0 else "bottom center" for index in range(len(chart_df))]
     
     hover_template = "<b>%{customdata}</b><br>" + (f"{title}: <b>%{{y:.0%}}</b>" if is_percentage else f"{title}: <b>%{{y:,.0f}}</b>") + "<extra></extra>"
