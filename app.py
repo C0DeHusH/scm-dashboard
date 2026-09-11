@@ -218,92 +218,55 @@ def workbook_has_average_daily_sales(file_bytes):
 
 
 def initialize_persistent_workbook():
+    """Restore the previously persisted dataset without requiring a reupload.
+
+    Supabase remains the authoritative persisted store when configured. The local
+    workbook is only a fallback when cloud storage is unavailable. Importantly,
+    workbook schema age (for example, whether Average Daily Sales already exists)
+    is NOT used to decide which dataset is newer, so historical/current persisted
+    data is never replaced merely because another copy has a newer column layout.
+    """
     if "scm_workbook_bytes" in st.session_state:
         return st.session_state["scm_workbook_bytes"], st.session_state.get("scm_storage_source", "Session cache")
 
     cloud_config = get_cloud_storage_config()
-    cloud_bytes = None
-    local_bytes = None
-    cloud_has_ads = False
-    local_has_ads = False
 
-    # Read cloud and local independently. Do not overwrite local until we know
-    # which copy is the better/most-current schema.
     if cloud_config["configured"]:
         try:
-            candidate = download_cloud_workbook()
-            if candidate:
-                _ = validate_excel_bytes(candidate)
-                cloud_bytes = candidate
-                cloud_has_ads = workbook_has_average_daily_sales(candidate)
-        except Exception as exc:
-            st.session_state["scm_cloud_warning"] = str(exc)
+            cloud_bytes = download_cloud_workbook()
+            if cloud_bytes:
+                _ = validate_excel_bytes(cloud_bytes)
+                st.session_state["scm_workbook_bytes"] = cloud_bytes
+                st.session_state["scm_storage_source"] = "Cloud • Supabase"
+                st.session_state.pop("scm_cloud_warning", None)
 
-    candidate = load_local_cache()
-    if candidate:
+                # Refresh local fallback with the same persisted dataset. This does
+                # not alter workbook contents; it only keeps an offline/cache copy.
+                try:
+                    _ = save_local_cache(cloud_bytes)
+                    st.session_state.pop("scm_local_warning", None)
+                except Exception as exc:
+                    st.session_state["scm_local_warning"] = f"Local cache could not be refreshed: {exc}"
+
+                return cloud_bytes, "Cloud • Supabase"
+        except Exception as exc:
+            st.session_state["scm_cloud_warning"] = (
+                "Cloud persistence is temporarily unavailable. The dashboard will "
+                f"use the last local copy when available. Details: {exc}"
+            )
+
+    local_bytes = load_local_cache()
+    if local_bytes:
         try:
-            _ = validate_excel_bytes(candidate)
-            local_bytes = candidate
-            local_has_ads = workbook_has_average_daily_sales(candidate)
+            _ = validate_excel_bytes(local_bytes)
         except Exception as exc:
             st.session_state["scm_local_warning"] = (
                 "The saved local cache is not a valid Excel workbook: " + str(exc)
             )
-
-    selected_bytes = None
-    selected_source = "No saved workbook"
-
-    if cloud_bytes is not None and local_bytes is not None:
-        cloud_hash = hashlib.sha256(cloud_bytes).hexdigest()
-        local_hash = hashlib.sha256(local_bytes).hexdigest()
-
-        if cloud_hash == local_hash:
-            selected_bytes = cloud_bytes
-            selected_source = "Cloud • Supabase"
-        elif local_has_ads and not cloud_has_ads:
-            # The exact bug fixed here: an older cloud workbook must not replace
-            # a newer local workbook that already has the current Raw_Data schema.
-            selected_bytes = local_bytes
-            selected_source = "Local cache • newer schema"
-
-            # Self-heal the cloud object so future sessions/restarts use the same
-            # current workbook. Failure is non-fatal; local remains authoritative.
-            if cloud_config["configured"]:
-                try:
-                    _ = upload_cloud_workbook(local_bytes)
-                    selected_source = "Cloud • Supabase (repaired from local cache)"
-                    st.session_state.pop("scm_cloud_warning", None)
-                except Exception as exc:
-                    st.session_state["scm_cloud_warning"] = (
-                        "Using the newer local workbook because the Supabase copy is older. "
-                        f"Automatic cloud repair could not be completed: {exc}"
-                    )
         else:
-            # When both copies have the same schema generation, keep Supabase as
-            # the shared authoritative store. Data Sync writes to both stores.
-            selected_bytes = cloud_bytes
-            selected_source = "Cloud • Supabase"
-            try:
-                _ = save_local_cache(cloud_bytes)
-            except Exception as exc:
-                st.session_state["scm_local_warning"] = f"Local cache could not be refreshed: {exc}"
-
-    elif cloud_bytes is not None:
-        selected_bytes = cloud_bytes
-        selected_source = "Cloud • Supabase"
-        try:
-            _ = save_local_cache(cloud_bytes)
-        except Exception as exc:
-            st.session_state["scm_local_warning"] = f"Local cache could not be refreshed: {exc}"
-
-    elif local_bytes is not None:
-        selected_bytes = local_bytes
-        selected_source = "Local cache"
-
-    if selected_bytes is not None:
-        st.session_state["scm_workbook_bytes"] = selected_bytes
-        st.session_state["scm_storage_source"] = selected_source
-        return selected_bytes, selected_source
+            st.session_state["scm_workbook_bytes"] = local_bytes
+            st.session_state["scm_storage_source"] = "Local cache"
+            return local_bytes, "Local cache"
 
     return None, "No saved workbook"
 
@@ -689,11 +652,30 @@ def process_excel_file(file_path_or_buffer):
     if missing_raw_cols:
         raise ValueError("Raw_Data is missing required column(s): " + ", ".join(missing_raw_cols))
 
-    # If the active persisted workbook is an older version, create the optional
-    # ADS field as blank so the dashboard can load. Branch Request New DoI will
-    # display N/A until a workbook with Average Daily Sales (Qty) is synced.
+    # Backward compatibility for previously persisted Raw_Data.
+    # Do NOT require a reupload just because the legacy workbook predates the
+    # Average Daily Sales column. Preserve every existing row and reconstruct ADS
+    # only where the existing values make it mathematically determinable:
+    #
+    #     Current DoI = Remaining Inventory / Average Daily Sales
+    #     therefore ADS = Remaining Inventory / Current DoI
+    #
+    # No guess is made when inventory/DoI cannot support the calculation.
+    legacy_ads_derived = False
     if not ads_source_available:
+        inventory_for_ads = pd.to_numeric(raw_df["remaining_inventory"], errors="coerce")
+        doi_for_ads = pd.to_numeric(raw_df["doi"], errors="coerce")
+        derivable_ads = (
+            inventory_for_ads.notna()
+            & doi_for_ads.notna()
+            & (inventory_for_ads > 0)
+            & (doi_for_ads > 0)
+        )
         raw_df[ads_target_col] = np.nan
+        raw_df.loc[derivable_ads, ads_target_col] = (
+            inventory_for_ads.loc[derivable_ads] / doi_for_ads.loc[derivable_ads]
+        )
+        legacy_ads_derived = bool(derivable_ads.any())
 
     # Keep inventory / transfer as whole units, but preserve Raw_Data DoI and
     # Average Daily Sales (Qty) precision for accurate request projection.
@@ -707,7 +689,8 @@ def process_excel_file(file_path_or_buffer):
     # Preserve NaN when ADS is unavailable so it is distinguishable from a
     # genuine zero-demand value.
     raw_df[ads_target_col] = pd.to_numeric(raw_df[ads_target_col], errors="coerce").astype(float)
-    raw_df["_ads_source_available"] = bool(ads_source_available)
+    raw_df["_ads_source_available"] = bool(ads_source_available or legacy_ads_derived)
+    raw_df["_ads_legacy_derived"] = bool((not ads_source_available) and legacy_ads_derived)
 
     raw_df["pareto_class"] = raw_df["pareto_class"].astype(str).str.strip()
     raw_df["stock_status"] = raw_df["stock_status"].fillna("").astype(str).str.strip()
@@ -836,20 +819,10 @@ def admin_login_dialog():
                 st.error("Invalid credentials.")
 
 def persist_uploaded_workbook(uploaded_bytes):
-    raw_check, _, _ = process_excel_file(io.BytesIO(uploaded_bytes))
-
-    # Do not allow an old-schema workbook to become the newly persisted source.
-    ads_source_available = bool(
-        raw_check.get("_ads_source_available", pd.Series(dtype=bool))
-        .fillna(False)
-        .astype(bool)
-        .any()
-    )
-    if not ads_source_available:
-        raise ValueError(
-            "Raw_Data must contain 'Average Daily Sales (Qty)' before Data Sync. "
-            "Use the latest import template or add the column to the workbook."
-        )
+    # Validate the workbook using the same backward-compatible parser used by the
+    # dashboard. Legacy Raw_Data is accepted and remains intact; ADS is derived in
+    # memory when possible, so users are not forced to rebuild/reupload old data.
+    _ = process_excel_file(io.BytesIO(uploaded_bytes))
 
     persistence_messages = []
     persistence_warnings = []
@@ -3250,19 +3223,6 @@ with tab_branch_requests:
         "Branch Request Status",
         
     )
-
-    ads_source_available = bool(
-        raw_data.get("_ads_source_available", pd.Series(dtype=bool))
-        .fillna(False)
-        .astype(bool)
-        .any()
-    )
-    if not ads_source_available:
-        st.warning(
-            "The active persisted Raw_Data is an older version and does not contain "
-            "'Average Daily Sales (Qty)'. The dashboard will continue to work, but "
-            "Branch Request New DoI will display N/A. Use Data Sync to load the latest workbook."
-        )
 
     request_source = raw_data.copy()
     request_source["branch"] = request_source["branch"].fillna("").astype(str).str.strip()
