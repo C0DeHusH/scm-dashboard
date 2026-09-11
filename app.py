@@ -912,6 +912,38 @@ def _trend_fit_for_series(periods, values, is_percentage):
     return fitted_y, direction, symbol
 
 
+def _trend_display_above_actual(periods, values, is_percentage):
+    """Build a dashed trend-direction guide that always stays above Actual.
+
+    Direction is calculated from the true least-squares fitted trend. The displayed
+    guide is then shifted upward by one constant offset, so its slope/direction is
+    preserved while it remains visually separated from every actual KPI point.
+    """
+    fitted_y, direction, symbol = _trend_fit_for_series(periods, values, is_percentage)
+    if fitted_y is None:
+        return None, direction, symbol
+
+    actual_y = pd.to_numeric(values, errors="coerce").to_numpy(dtype=float)
+    fitted_y = np.asarray(fitted_y, dtype=float)
+    valid = np.isfinite(actual_y) & np.isfinite(fitted_y)
+    if valid.sum() == 0:
+        return None, direction, symbol
+
+    actual_valid = actual_y[valid]
+    actual_span = max(float(np.nanmax(actual_valid)) - float(np.nanmin(actual_valid)), 0.0)
+
+    # Minimum visual separation: 0.8 percentage point for percentage KPIs,
+    # or 0.75 day/unit for non-percentage KPIs. Wider series receive a
+    # proportional gap so the guide remains clearly above the actual line.
+    minimum_gap = 0.008 if is_percentage else 0.75
+    visual_gap = max(actual_span * 0.12, minimum_gap)
+
+    # One constant vertical translation preserves the fitted slope exactly.
+    required_shift = float(np.nanmax(actual_y[valid] - fitted_y[valid])) + visual_gap
+    display_y = fitted_y + max(required_shift, visual_gap)
+    return display_y, direction, symbol
+
+
 def _trend_direction_for_series(periods, values, is_percentage):
     """Backward-compatible direction helper used by any existing call sites."""
     _, direction, symbol = _trend_fit_for_series(periods, values, is_percentage)
@@ -1273,10 +1305,10 @@ def create_class_a_ranking_figures(high_df, zero_df):
 
 
 def create_styled_line_chart(df, y_col, title, subtitle, line_color, is_weekly, is_percentage=True, fill=False):
-    """Executive KPI chart: actual series + true broken/dashed fitted trend line.
+    """Executive KPI chart: Actual series + broken trend-direction guide above it.
 
-    Actual KPI values and rounding logic are unchanged. The trend line is a visual
-    least-squares fit on those displayed values and is clearly separated as a guide.
+    Actual KPI values and rounding logic are unchanged. Trend direction comes from
+    the least-squares fit; only the guide's vertical position is offset for clarity.
     """
     chart_df = prepare_chart_series(df, y_col)
     fig = go.Figure()
@@ -1333,7 +1365,9 @@ def create_styled_line_chart(df, y_col, title, subtitle, line_color, is_weekly, 
         marker_sizes[-1] = 10.5
 
     hover_dates = chart_df["period"].dt.strftime("%d %b %Y")
-    fitted_y, trend_direction, direction_symbol = _trend_fit_for_series(chart_df["period"], plot_y, is_percentage)
+    trend_guide_y, trend_direction, direction_symbol = _trend_display_above_actual(
+        chart_df["period"], plot_y, is_percentage
+    )
     fillcolor = _hex_to_rgba(line_color, 0.08) if fill else None
     hover_template = "<b>%{customdata}</b><br>" + (
         f"{title}: <b>%{{y:.0%}}</b>" if is_percentage else f"{title}: <b>%{{y:,.0f}}</b>"
@@ -1356,24 +1390,27 @@ def create_styled_line_chart(df, y_col, title, subtitle, line_color, is_weekly, 
         cliponaxis=False,
     ))
 
-    # Keep the requested broken trend line. Unlike the earlier displaced guide,
-    # this dashed line is the true linear fit on the displayed actual series.
-    if fitted_y is not None:
-        trend_hover = "Trend guide: <b>%{y:.0%}</b>" if is_percentage else "Trend guide: <b>%{y:,.0f}</b>"
-        trend_hover += f"<br>Direction: <b>{trend_direction} {direction_symbol}</b><extra></extra>"
+    # Broken/dashed trend-direction guide. It keeps the true fitted slope and
+    # direction but is vertically translated so it always sits above Actual.
+    if trend_guide_y is not None:
+        trend_hover = (
+            f"Trend Direction: <b>{trend_direction} {direction_symbol}</b>"
+            "<br><span style='font-size:10px'>Broken line is positioned above Actual for readability</span>"
+            "<extra></extra>"
+        )
         _ = fig.add_trace(go.Scatter(
             x=chart_x,
-            y=fitted_y,
-            name=f"Trend {direction_symbol}",
+            y=trend_guide_y,
+            name=f"Trend Direction {direction_symbol}",
             mode="lines",
-            line=dict(width=2.2, dash="dash", color="rgba(148,163,184,0.95)"),
+            line=dict(width=2.4, dash="dash", color="rgba(148,163,184,0.98)"),
             hovertemplate=trend_hover,
             connectgaps=False,
         ))
 
     max_observed = pd.to_numeric(plot_y, errors="coerce").max()
-    if fitted_y is not None:
-        finite_fit = np.asarray(fitted_y, dtype=float)
+    if trend_guide_y is not None:
+        finite_fit = np.asarray(trend_guide_y, dtype=float)
         finite_fit = finite_fit[np.isfinite(finite_fit)]
         if finite_fit.size:
             max_observed = max(float(max_observed), float(np.nanmax(finite_fit)))
