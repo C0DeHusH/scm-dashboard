@@ -1688,7 +1688,7 @@ def build_branch_request_report(raw_data, request_lines):
 
 
 def build_branch_request_excel(report_df, requesting_branch=None):
-    """Create a one-branch, portrait, print-ready Branch Request validation workbook."""
+    """Create a branch-scoped, multi-item, portrait Branch Request validation workbook."""
     output = io.BytesIO()
     try:
         from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
@@ -1700,7 +1700,7 @@ def build_branch_request_excel(report_df, requesting_branch=None):
     if export_df.empty:
         raise ValueError("There are no request lines to export.")
 
-    # Enforce one requesting branch per workbook/report.
+    # Limit the workbook to one requesting branch, while retaining ALL request items for that branch.
     report_branches = export_df.get("Branch", pd.Series(dtype=str)).fillna("").astype(str).str.strip()
     available_branches = [b for b in report_branches.unique().tolist() if b]
     branch_name = str(requesting_branch or (available_branches[0] if available_branches else "UNSPECIFIED BRANCH")).strip()
@@ -1788,7 +1788,7 @@ def build_branch_request_excel(report_df, requesting_branch=None):
         # Compact branch/report metadata.
         metadata = [
             ("AREA", branch_area or "—", "REPORT DATE", datetime.now().strftime("%d %b %Y")),
-            ("REQUEST LINES", f"{total_lines:,}", "TOTAL REQUEST QTY", f"{total_request_qty:,}"),
+            ("REQUEST ITEMS", f"{total_lines:,}", "TOTAL REQUEST QTY", f"{total_request_qty:,}"),
             ("RISK LINES", f"{risk_lines:,}", "VALIDATED", f"{validated_lines:,} / {total_lines:,}"),
         ]
         meta_row = 8
@@ -1813,7 +1813,7 @@ def build_branch_request_excel(report_df, requesting_branch=None):
             meta_row += 1
 
         ws.merge_cells(start_row=12, start_column=1, end_row=12, end_column=6)
-        ws["A12"] = "REQUEST DETAILS"
+        ws["A12"] = f"REQUEST DETAILS • {total_lines:,} ITEM(S) INCLUDED FOR {branch_name}"
         ws["A12"].font = Font(bold=True, size=11, color=white)
         ws["A12"].fill = PatternFill("solid", fgColor=indigo)
         ws["A12"].alignment = Alignment(horizontal="left", vertical="center")
@@ -1958,7 +1958,7 @@ def build_branch_request_excel(report_df, requesting_branch=None):
             ws.cell(row_cursor + 1, start_col).alignment = Alignment(horizontal="center")
             ws.cell(row_cursor + 1, start_col).font = Font(bold=True, size=8, color=slate)
 
-        # Portrait print configuration. One branch per workbook/report.
+        # Portrait print configuration. One branch per workbook/report; multiple request items are allowed.
         ws.sheet_view.showGridLines = False
         ws.freeze_panes = "A13"
         ws.page_setup.orientation = "portrait"
@@ -2365,16 +2365,16 @@ with tab_branch_requests:
     st.markdown("<br>", unsafe_allow_html=True)
     section_heading(
         "Branch Request Status",
-        "One-branch request validation with automatic inventory and DoI recalculation from Raw_Data",
+        "Branch-scoped multi-item request validation with automatic inventory and DoI recalculation from Raw_Data",
     )
 
     st.markdown(
         """
         <div class='import-dialog-note' style='margin-bottom:1rem;'>
-            <b>Automatic branch request report:</b> Select the <b>Requesting Branch</b>, then enter the
-            <b>Request Quantity</b> and <b>Remarks / Justification</b> directly beside the branch models.
+            <b>Automatic branch request report:</b> Select the <b>Requesting Branch</b>, then enter a
+            <b>Request Quantity</b> and <b>Remarks / Justification</b> for <b>as many models/items as needed</b>.
             Inventory, Stock Status, Current DoI, New Inventory, and New DoI update automatically.
-            Each generated report is intentionally limited to <b>one requesting branch</b> and is formatted for <b>portrait printing</b>.
+            The display and downloadable report are limited by <b>branch only—not by item</b>: all requested items for the selected branch are included in the same <b>portrait</b> report.
         </div>
         """,
         unsafe_allow_html=True,
@@ -2395,7 +2395,7 @@ with tab_branch_requests:
                 "REQUESTING BRANCH",
                 branch_options,
                 key="branch_request_branch_input_v3",
-                help="The report is limited to this branch only.",
+                help="The display/report is scoped to this branch, but can include multiple requested models/items.",
             )
 
         branch_source = request_source[request_source["branch"] == request_branch].copy()
@@ -2432,7 +2432,7 @@ with tab_branch_requests:
         st.markdown("<div style='height:0.35rem'></div>", unsafe_allow_html=True)
         section_heading(
             "Request Input",
-            "Enter quantity and justification; calculated report details refresh automatically",
+            "Enter quantities for multiple models/items; all active requests for this branch refresh automatically",
         )
 
         edited_requests = st.data_editor(
@@ -2449,7 +2449,7 @@ with tab_branch_requests:
                     min_value=0,
                     step=1,
                     format="%d",
-                    help="Enter the requested replenishment quantity for this model.",
+                    help="Enter a requested quantity for every model/item needed by this branch. Multiple rows may be requested at the same time.",
                 ),
                 "Remarks / Justification": st.column_config.TextColumn(
                     "Remarks / Justification",
@@ -2464,7 +2464,9 @@ with tab_branch_requests:
 
         request_qty_series = pd.to_numeric(edited_requests["Request Quantity"], errors="coerce").fillna(0).clip(lower=0)
         remarks_series = edited_requests["Remarks / Justification"].fillna("").astype(str).str.strip()
-        active_mask = request_qty_series.gt(0) | remarks_series.ne("")
+        # A report item becomes active when its Request Quantity is greater than zero.
+        # Users may activate as many model rows as needed for the selected branch.
+        active_mask = request_qty_series.gt(0)
         active_input = edited_requests.loc[active_mask].copy()
 
         if not active_input.empty:
@@ -2483,7 +2485,7 @@ with tab_branch_requests:
             st.markdown("---")
             section_heading(
                 "Automatic Branch Request Report",
-                f"Requesting Branch: {request_branch} • live results update when the input table changes",
+                f"Requesting Branch: {request_branch} • {len(request_report):,} requested item(s) • all items for this branch are included",
             )
 
             total_lines = len(request_report)
@@ -2493,7 +2495,7 @@ with tab_branch_requests:
             remarks_count = int(request_report["Remarks / Justification"].fillna("").astype(str).str.strip().ne("").sum())
 
             k1, k2, k3, k4 = st.columns(4, gap="small")
-            k1.markdown(request_metric_card_html("REQUEST LINES", f"{total_lines:,}", "THIS BRANCH ONLY", "blue", "#"), unsafe_allow_html=True)
+            k1.markdown(request_metric_card_html("REQUEST ITEMS", f"{total_lines:,}", "ALL ITEMS • THIS BRANCH", "blue", "#"), unsafe_allow_html=True)
             k2.markdown(request_metric_card_html("TOTAL REQUEST QTY", f"{total_requested:,}", "REQUESTED UNITS", "green", "Q"), unsafe_allow_html=True)
             k3.markdown(request_metric_card_html("RISK LINES", f"{risk_lines:,}", "STOCKOUT / CRITICAL / LOW", "red" if risk_lines else "green", "!"), unsafe_allow_html=True)
             k4.markdown(request_metric_card_html("WITH JUSTIFICATION", f"{remarks_count:,}", "REMARKS COMPLETED", "blue", "R"), unsafe_allow_html=True)
@@ -2548,7 +2550,7 @@ with tab_branch_requests:
                 with note_col:
                     st.caption(
                         "The workbook is generated from the current inputs automatically, displays the Requesting Branch at the top, "
-                        "contains only that branch's request lines, and uses a vertical portrait layout for printing."
+                        "and includes ALL requested models/items entered for that branch in one portrait report. There is no one-item limit."
                     )
             except Exception as exc:
                 st.error(f"Excel report generation unavailable: {exc}")
@@ -2557,8 +2559,8 @@ with tab_branch_requests:
                 st.dataframe(request_report, hide_index=True, width="stretch")
         else:
             st.info(
-                f"Enter a Request Quantity or Remarks / Justification for one or more {request_branch} models. "
-                "The validation report will appear automatically below."
+                f"Enter Request Quantity and Remarks / Justification for one or more {request_branch} models/items. "
+                "You may request multiple models at the same time; the branch report will include all active request items automatically."
             )
 
 
