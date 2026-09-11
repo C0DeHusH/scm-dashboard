@@ -2842,11 +2842,7 @@ with tab_branch_requests:
                     key="branch_request_download_csv_v7",
                 )
 
-            with note_col:
-                st.caption(
-                    "New DoI remains available on-screen only. It is excluded from Excel/CSV downloads. "
-                    "The Excel report remains A4 Portrait, has no frozen panes, and includes all requested models for the selected branch."
-                )
+    
 
             with st.expander("View Full Validation Data"):
                 st.dataframe(request_report, hide_index=True, width="stretch")
