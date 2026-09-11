@@ -968,7 +968,7 @@ def infer_percentage_scale(series):
 
 
 def _ranked_bar_palette(length, mode="risk"):
-    """Executive rank palette; changes visual emphasis only, never values/order."""
+    """Executive bar palette; changes visual emphasis only, never values/order."""
     if length <= 0:
         return []
     if mode == "positive":
@@ -992,15 +992,13 @@ def _create_power_ranked_bar(
     percent=True,
     positive=False,
     text_values=None,
-    reference_value=None,
-    reference_label="Reference",
     height=None,
 ):
-    """Create an executive 'track + value' horizontal ranking bar.
+    """Create an executive track + value horizontal bar.
 
-    The background track improves scan speed; rank prefix, risk emphasis, direct
-    labels and a reference marker make the graph decision-oriented while the
-    original values remain unchanged.
+    The background track improves scan speed while risk emphasis and direct
+    labels keep the graph decision-oriented. Original values and sort order
+    remain unchanged.
     """
     if df is None or df.empty:
         return None
@@ -1008,7 +1006,7 @@ def _create_power_ranked_bar(
     plot_df = df.copy().reset_index(drop=True)
     values = pd.to_numeric(plot_df[value_col], errors="coerce").fillna(0.0)
     categories = plot_df[category_col].fillna("").astype(str).tolist()
-    ranked_labels = [f"{idx + 1:02d}  {label}" for idx, label in enumerate(categories)]
+    display_labels = categories
 
     observed_max = float(values.max()) if len(values) else 0.0
     if percent:
@@ -1029,7 +1027,7 @@ def _create_power_ranked_bar(
     # Background track establishes a consistent visual scale for every row.
     _ = fig.add_trace(go.Bar(
         x=[axis_max] * len(plot_df),
-        y=ranked_labels,
+        y=display_labels,
         orientation="h",
         marker=dict(color=track_color, line=dict(width=0)),
         width=0.66,
@@ -1040,7 +1038,7 @@ def _create_power_ranked_bar(
     # Actual measured value.
     _ = fig.add_trace(go.Bar(
         x=values,
-        y=ranked_labels,
+        y=display_labels,
         orientation="h",
         marker=dict(
             color=bar_colors,
@@ -1056,18 +1054,6 @@ def _create_power_ranked_bar(
         showlegend=False,
         name="Actual",
     ))
-
-    if reference_value is not None and np.isfinite(float(reference_value)):
-        reference_value = float(reference_value)
-        _ = fig.add_vline(
-            x=reference_value,
-            line_width=1.5,
-            line_dash="dot",
-            line_color="rgba(148,163,184,0.82)",
-            annotation_text=(f"{reference_label} {reference_value:.0f}%" if percent else f"{reference_label} {reference_value:,.0f}"),
-            annotation_position="top",
-            annotation_font=dict(size=9, color=PLOTLY_CHART_MUTED, family=PLOTLY_FONT_FAMILY),
-        )
 
     chart_height = height or max(420, 48 * len(plot_df) + 150)
     xaxis = dict(
@@ -1110,7 +1096,7 @@ def _create_power_ranked_bar(
             title="",
             type="category",
             categoryorder="array",
-            categoryarray=ranked_labels,
+            categoryarray=display_labels,
             autorange="reversed",
             showgrid=False,
             showline=False,
@@ -1166,21 +1152,16 @@ def create_area_stockout_figures(area_rates_df):
         return None, None
 
     # Data order and values are inherited from build_area_stockout_summary unchanged.
-    avg_reference = float(pd.to_numeric(area_rates_df["Average Stock Out Rate"], errors="coerce").mean())
-    class_a_reference = float(pd.to_numeric(area_rates_df["Class A Stock Out Rate"], errors="coerce").mean())
-
     fig_avg = _create_power_ranked_bar(
         area_rates_df,
         category_col="Area",
         value_col="Average Stock Out Rate",
         title="Average Stock Out Rate per Area",
-        subtitle="EXECUTIVE RISK RANKING • HIGHEST-RISK AREA FIRST • DOTTED LINE = AREA MEAN",
+        subtitle="EXECUTIVE RISK VIEW • HIGHEST-RISK AREA FIRST",
         value_axis_title="Stockout rate",
         hovertemplate="<b>%{y}</b><br>Average Stock Out Rate: <b>%{x:.0f}%</b><extra></extra>",
         percent=True,
         positive=False,
-        reference_value=avg_reference,
-        reference_label="Area mean",
         height=max(425, 50 * len(area_rates_df) + 150),
     )
 
@@ -1189,7 +1170,7 @@ def create_area_stockout_figures(area_rates_df):
         category_col="Area",
         value_col="Class A Stock Out Rate",
         title="Class A Stock Out Rate per Area",
-        subtitle="PARETO PRIORITY RISK • DIRECT RATE + STOCKOUT COUNTS • DOTTED LINE = AREA MEAN",
+        subtitle="PARETO PRIORITY RISK • DIRECT RATE + STOCKOUT COUNTS",
         value_axis_title="Class A stockout rate",
         custom_data_cols=["Class A Stock Out Count", "Class A Total Stock Status Count"],
         hovertemplate=(
@@ -1199,15 +1180,13 @@ def create_area_stockout_figures(area_rates_df):
         ),
         percent=True,
         positive=False,
-        reference_value=class_a_reference,
-        reference_label="Area mean",
         height=max(425, 50 * len(area_rates_df) + 150),
     )
     return fig_avg, fig_class_a
 
 
 def build_class_a_branch_summary(source_df, selected_area):
-    """Exact Class A branch ranking logic, normalized once and reused."""
+    """Exact Class A branch performance logic, normalized once and reused."""
     branch_source = source_df.copy()
     branch_source["_normalized_class"] = branch_source["pareto_class"].fillna("").astype(str).str.strip().str.casefold()
     branch_source["_normalized_status"] = branch_source["stock_status"].fillna("").astype(str).str.strip().str.casefold()
@@ -1253,13 +1232,12 @@ def create_class_a_ranking_figures(high_df, zero_df):
     fig_zero = None
 
     if not high_df.empty:
-        risk_reference = float(pd.to_numeric(high_df["Class A Stock Out Rate"], errors="coerce").mean())
         fig_high = _create_power_ranked_bar(
             high_df,
             category_col="Branch Display",
             value_col="Class A Stock Out Rate",
-            title=f"Top {len(high_df)} Highest Class A Stock Out Rate",
-            subtitle="PRIORITY BRANCH RISK • TOP 3 EMPHASIZED • DOTTED LINE = DISPLAYED-BRANCH MEAN",
+            title="Highest Class A Stock Out Rate",
+            subtitle="PRIORITY BRANCH RISK • HIGHEST-RISK BRANCHES FIRST",
             value_axis_title="Class A stockout rate",
             custom_data_cols=["area", "branch", "Class A Stock Out Count", "Class A Total Stock Status Count"],
             hovertemplate=(
@@ -1270,21 +1248,18 @@ def create_class_a_ranking_figures(high_df, zero_df):
             ),
             percent=True,
             positive=False,
-            reference_value=risk_reference,
-            reference_label="Top-branch mean",
             height=max(430, 48 * len(high_df) + 155),
         )
 
     if not zero_df.empty:
         zero_plot = zero_df.copy()
         zero_plot["Zero Rate Label"] = "0% OOS"
-        coverage_reference = float(pd.to_numeric(zero_plot["Class A Total Stock Status Count"], errors="coerce").median())
         fig_zero = _create_power_ranked_bar(
             zero_plot,
             category_col="Branch Display",
             value_col="Class A Total Stock Status Count",
-            title=f"Top {len(zero_plot)} Branches with 0% Class A Stock Out Rate",
-            subtitle="ZERO-OOS LEADERS • RANKED BY CLASS A COVERAGE • DOTTED LINE = MEDIAN COVERAGE",
+            title="Branches with 0% Class A Stock Out Rate",
+            subtitle="ZERO-OOS LEADERS • ORDERED BY CLASS A COVERAGE",
             value_axis_title="Class A stock-status coverage count",
             custom_data_cols=["area", "branch", "Class A Stock Out Rate", "Class A Stock Out Count", "Class A Total Stock Status Count"],
             hovertemplate=(
@@ -1296,8 +1271,6 @@ def create_class_a_ranking_figures(high_df, zero_df):
             percent=False,
             positive=True,
             text_values=zero_plot["Zero Rate Label"].tolist(),
-            reference_value=coverage_reference,
-            reference_label="Median coverage",
             height=max(430, 48 * len(zero_plot) + 155),
         )
 
@@ -1744,7 +1717,7 @@ def ppt_figure_png(fig, width=1500, height=820):
                 else: _ = ax.set_ylim(lo, hi)
         except Exception: pass
 
-    # Preserve Plotly reference lines (e.g. area mean / median coverage) in PPT exports.
+    # Preserve any Plotly layout line shapes used by other figures in PPT exports.
     layout_shapes = list(getattr(layout, "shapes", []) or []) if layout is not None else []
     for shape in layout_shapes:
         if str(getattr(shape, "type", "line") or "line").lower() != "line":
@@ -1762,7 +1735,7 @@ def ppt_figure_png(fig, width=1500, height=820):
         if np.isfinite(x0) and np.isfinite(x1) and abs(x0 - x1) < 1e-12:
             _ = ax.axvline(x0, color=shape_color, linewidth=shape_width, linestyle=shape_style, alpha=0.9, zorder=5)
 
-    # Preserve the compact labels generated by Plotly add_vline(annotation_text=...).
+    # Preserve any compact Plotly layout annotations that accompany line shapes.
     layout_annotations = list(getattr(layout, "annotations", []) or []) if layout is not None else []
     for annotation in layout_annotations:
         try:
@@ -1979,21 +1952,21 @@ def build_scm_presentation(raw_data, kpi_ytd, kpi_weekly, selected_area):
         p.font.name = "Aptos"; p.font.size = Pt(11); p.font.color.rgb = ppt_rgb(colors["text"]); p.space_after = Pt(6)
     _ = ppt_add_footer(slide, f"Performance overview • {selected_area}", colors)
 
-    # Class A branch ranking — shared summary/figure engine with dashboard
+    # Class A branch performance — shared summary/figure engine with dashboard
     branch_rank_summary = build_class_a_branch_summary(selected_area_data, selected_area)
     high, zero = split_class_a_branch_rankings(branch_rank_summary, limit=10)
     if not branch_rank_summary.empty:
         fig_high, fig_zero = create_class_a_ranking_figures(high, zero)
         slide = prs.slides.add_slide(blank)
         _ = ppt_add_background(slide, colors)
-        _ = ppt_add_title(slide, "Class A Branch Stockout Ranking", f"Top branch risks and zero-stockout leaders • {selected_area}", colors)
+        _ = ppt_add_title(slide, "Class A Branch Stockout Performance", f"Top branch risks and zero-stockout leaders • {selected_area}", colors)
         if fig_high is not None:
             _ = ppt_add_panel(slide, Inches(0.55), Inches(1.38), Inches(5.95), Inches(5.35), "", colors)
             _ = ppt_add_image(slide, ppt_figure_png(fig_high), Inches(0.67), Inches(1.56), Inches(5.70), Inches(4.95))
         if fig_zero is not None:
             _ = ppt_add_panel(slide, Inches(6.75), Inches(1.38), Inches(5.95), Inches(5.35), "", colors)
             _ = ppt_add_image(slide, ppt_figure_png(fig_zero), Inches(6.87), Inches(1.56), Inches(5.70), Inches(4.95))
-        _ = ppt_add_footer(slide, f"Class A branch ranking • {selected_area}", colors)
+        _ = ppt_add_footer(slide, f"Class A branch performance • {selected_area}", colors)
 
     # Every branch: rates + model stock status
     branches = sorted([b for b in selected_area_data["branch"].dropna().astype(str).str.strip().unique() if b])
@@ -2716,7 +2689,7 @@ with tab_inventory:
     # 10. CLASS A BRANCH RANKING
     # =========================================================
     st.markdown("<br>", unsafe_allow_html=True)
-    section_heading("Class A Branch Stockout Ranking", f"Top branch risks and zero-stockout leaders • {selected_area}")
+    section_heading("Class A Branch Stockout Performance", f"Top branch risks and zero-stockout leaders • {selected_area}")
     TOP_BRANCH_LIMIT = 10
 
     branch_class_a_summary = build_class_a_branch_summary(area_data, selected_area)
@@ -2738,7 +2711,7 @@ with tab_inventory:
                 st.warning("No branch currently has a 0% Class A Stock Out Rate in this scope.")
             else:
                 _ = st.plotly_chart(fig_zero_class_a, width="stretch", config=PLOTLY_BAR_CONFIG)
-                st.caption("Zero-stockout leaders are ranked by Class A stock-status coverage count; every branch shown has exactly 0% Class A Stock Out Rate.")
+                st.caption("Zero-stockout leaders are ordered by Class A stock-status coverage count; every branch shown has exactly 0% Class A Stock Out Rate.")
 
 
     st.markdown("---")
