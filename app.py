@@ -183,36 +183,127 @@ def load_local_cache():
         return file_handle.read()
 
 
+def workbook_has_average_daily_sales(file_bytes):
+    """Return True when Raw_Data contains the current Average Daily Sales field.
+
+    This is intentionally a lightweight schema check used during startup so an
+    older cloud copy cannot overwrite a newer local workbook after refresh.
+    """
+    if not file_bytes:
+        return False
+
+    buffer = io.BytesIO(file_bytes)
+    excel_engine = detect_excel_engine(buffer)
+    buffer.seek(0)
+    xls = pd.ExcelFile(buffer, engine=excel_engine)
+    sheet_map = {str(sheet).lower().strip().replace(" ", "_"): sheet for sheet in xls.sheet_names}
+    raw_sheet = sheet_map.get("raw_data")
+    if raw_sheet is None:
+        return False
+
+    raw_headers = pd.read_excel(xls, sheet_name=raw_sheet, nrows=0).columns
+    compact_headers = {
+        "".join(ch for ch in str(col).casefold() if ch.isalnum())
+        for col in raw_headers
+    }
+    ads_alias_keys = {
+        "averagedailysalesqty",
+        "averagedailysalesquantity",
+        "avgdailysalesqty",
+        "avgdailysalesquantity",
+        "adsqty",
+        "averagedailysales",
+    }
+    return bool(compact_headers & ads_alias_keys)
+
+
 def initialize_persistent_workbook():
     if "scm_workbook_bytes" in st.session_state:
         return st.session_state["scm_workbook_bytes"], st.session_state.get("scm_storage_source", "Session cache")
 
     cloud_config = get_cloud_storage_config()
+    cloud_bytes = None
+    local_bytes = None
+    cloud_has_ads = False
+    local_has_ads = False
+
+    # Read cloud and local independently. Do not overwrite local until we know
+    # which copy is the better/most-current schema.
     if cloud_config["configured"]:
         try:
-            cloud_bytes = download_cloud_workbook()
-            if cloud_bytes:
-                _ = validate_excel_bytes(cloud_bytes)
-                st.session_state["scm_workbook_bytes"] = cloud_bytes
-                st.session_state["scm_storage_source"] = "Cloud • Supabase"
-                try:
-                    _ = save_local_cache(cloud_bytes)
-                except Exception:
-                    pass
-                return cloud_bytes, "Cloud • Supabase"
+            candidate = download_cloud_workbook()
+            if candidate:
+                _ = validate_excel_bytes(candidate)
+                cloud_bytes = candidate
+                cloud_has_ads = workbook_has_average_daily_sales(candidate)
         except Exception as exc:
             st.session_state["scm_cloud_warning"] = str(exc)
 
-    local_bytes = load_local_cache()
-    if local_bytes:
+    candidate = load_local_cache()
+    if candidate:
         try:
-            _ = validate_excel_bytes(local_bytes)
+            _ = validate_excel_bytes(candidate)
+            local_bytes = candidate
+            local_has_ads = workbook_has_average_daily_sales(candidate)
         except Exception as exc:
-            st.session_state["scm_local_warning"] = "The saved local cache is not a valid Excel workbook: " + str(exc)
+            st.session_state["scm_local_warning"] = (
+                "The saved local cache is not a valid Excel workbook: " + str(exc)
+            )
+
+    selected_bytes = None
+    selected_source = "No saved workbook"
+
+    if cloud_bytes is not None and local_bytes is not None:
+        cloud_hash = hashlib.sha256(cloud_bytes).hexdigest()
+        local_hash = hashlib.sha256(local_bytes).hexdigest()
+
+        if cloud_hash == local_hash:
+            selected_bytes = cloud_bytes
+            selected_source = "Cloud • Supabase"
+        elif local_has_ads and not cloud_has_ads:
+            # The exact bug fixed here: an older cloud workbook must not replace
+            # a newer local workbook that already has the current Raw_Data schema.
+            selected_bytes = local_bytes
+            selected_source = "Local cache • newer schema"
+
+            # Self-heal the cloud object so future sessions/restarts use the same
+            # current workbook. Failure is non-fatal; local remains authoritative.
+            if cloud_config["configured"]:
+                try:
+                    _ = upload_cloud_workbook(local_bytes)
+                    selected_source = "Cloud • Supabase (repaired from local cache)"
+                    st.session_state.pop("scm_cloud_warning", None)
+                except Exception as exc:
+                    st.session_state["scm_cloud_warning"] = (
+                        "Using the newer local workbook because the Supabase copy is older. "
+                        f"Automatic cloud repair could not be completed: {exc}"
+                    )
         else:
-            st.session_state["scm_workbook_bytes"] = local_bytes
-            st.session_state["scm_storage_source"] = "Local cache"
-            return local_bytes, "Local cache"
+            # When both copies have the same schema generation, keep Supabase as
+            # the shared authoritative store. Data Sync writes to both stores.
+            selected_bytes = cloud_bytes
+            selected_source = "Cloud • Supabase"
+            try:
+                _ = save_local_cache(cloud_bytes)
+            except Exception as exc:
+                st.session_state["scm_local_warning"] = f"Local cache could not be refreshed: {exc}"
+
+    elif cloud_bytes is not None:
+        selected_bytes = cloud_bytes
+        selected_source = "Cloud • Supabase"
+        try:
+            _ = save_local_cache(cloud_bytes)
+        except Exception as exc:
+            st.session_state["scm_local_warning"] = f"Local cache could not be refreshed: {exc}"
+
+    elif local_bytes is not None:
+        selected_bytes = local_bytes
+        selected_source = "Local cache"
+
+    if selected_bytes is not None:
+        st.session_state["scm_workbook_bytes"] = selected_bytes
+        st.session_state["scm_storage_source"] = selected_source
+        return selected_bytes, selected_source
 
     return None, "No saved workbook"
 
@@ -745,23 +836,59 @@ def admin_login_dialog():
                 st.error("Invalid credentials.")
 
 def persist_uploaded_workbook(uploaded_bytes):
-    _ = process_excel_file(io.BytesIO(uploaded_bytes))
+    raw_check, _, _ = process_excel_file(io.BytesIO(uploaded_bytes))
+
+    # Do not allow an old-schema workbook to become the newly persisted source.
+    ads_source_available = bool(
+        raw_check.get("_ads_source_available", pd.Series(dtype=bool))
+        .fillna(False)
+        .astype(bool)
+        .any()
+    )
+    if not ads_source_available:
+        raise ValueError(
+            "Raw_Data must contain 'Average Daily Sales (Qty)' before Data Sync. "
+            "Use the latest import template or add the column to the workbook."
+        )
+
     persistence_messages = []
+    persistence_warnings = []
+
+    # Make the validated upload active immediately. A cloud connectivity problem
+    # must never cause the dashboard to fall back to the previous workbook.
+    st.session_state["scm_workbook_bytes"] = uploaded_bytes
+    st.session_state["scm_storage_source"] = "Active session"
+
     try:
         _ = save_local_cache(uploaded_bytes)
         persistence_messages.append("local cache")
+        st.session_state["scm_storage_source"] = "Local cache"
+        st.session_state.pop("scm_local_warning", None)
     except Exception as exc:
-        st.warning(f"Local cache could not be updated: {exc}")
+        warning = f"Local cache could not be updated: {exc}"
+        persistence_warnings.append(warning)
+        st.session_state["scm_local_warning"] = warning
 
-    new_storage_source = "Local cache"
     if cloud_config["configured"]:
-        _ = upload_cloud_workbook(uploaded_bytes)
-        new_storage_source = "Cloud • Supabase"
-        persistence_messages.append("Supabase cloud storage")
+        try:
+            _ = upload_cloud_workbook(uploaded_bytes)
+            persistence_messages.append("Supabase cloud storage")
+            st.session_state["scm_storage_source"] = "Cloud • Supabase"
+            st.session_state.pop("scm_cloud_warning", None)
+        except Exception as exc:
+            warning = (
+                "The workbook is active and saved locally, but Supabase could not be updated. "
+                f"The app will continue using the latest local copy: {exc}"
+            )
+            persistence_warnings.append(warning)
+            st.session_state["scm_cloud_warning"] = warning
 
-    st.session_state["scm_workbook_bytes"] = uploaded_bytes
-    st.session_state["scm_storage_source"] = new_storage_source
     destination_text = " + ".join(persistence_messages) if persistence_messages else "active dashboard session"
+    if persistence_warnings:
+        return (
+            f"SCM workbook validated and saved to {destination_text}. "
+            "Cloud/local persistence has a notice; the latest uploaded workbook remains active."
+        )
     return f"SCM workbook validated and saved to {destination_text}."
 
 
