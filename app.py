@@ -1736,14 +1736,6 @@ def build_branch_request_excel(report_df):
         .isin(["stockout", "critical", "low"])
     )
     risk_lines = int(risk_mask.sum()) if len(risk_mask) else 0
-    validated_lines = int(
-        export_df.get("Request Check", pd.Series(dtype=str))
-        .fillna("")
-        .astype(str)
-        .str.startswith("VALIDATED")
-        .sum()
-    )
-
     # Fixed 8-column portrait canvas. Requested items flow vertically down the page.
     sheet_name = "Branch Request"
     navy = "0F172A"
@@ -1818,7 +1810,7 @@ def build_branch_request_excel(report_df):
             alignment=Alignment(horizontal="left", vertical="center"),
         )
         merge_value(
-            ws, "A2:H2", "MUTI MC SCM Executive Control Tower • Inventory Request Validation",
+            ws, "A2:H2", "MUTI MC SCM Executive Control Tower • Branch Request Report",
             fill=PatternFill("solid", fgColor=navy),
             font=Font(bold=True, size=9, color="CBD5E1"),
             alignment=Alignment(horizontal="left", vertical="center"),
@@ -1873,12 +1865,11 @@ def build_branch_request_excel(report_df):
         )
         ws.row_dimensions[5].height = 24
 
-        # Summary cards, arranged 2x2 to fit portrait width cleanly.
+        # Compact portrait summary. Validation is intentionally display-only and is not printed.
         summary_cards = [
             ("A7:B7", "A8:B8", "REQUESTED ITEMS", f"{total_lines:,}", blue),
-            ("C7:D7", "C8:D8", "TOTAL REQUEST QTY", f"{total_request_qty:,}", green),
-            ("E7:F7", "E8:F8", "RISK ITEMS", f"{risk_lines:,}", red if risk_lines else green),
-            ("G7:H7", "G8:H8", "VALIDATED", f"{validated_lines:,}/{total_lines:,}", indigo),
+            ("C7:E7", "C8:E8", "TOTAL REQUEST QTY", f"{total_request_qty:,}", green),
+            ("F7:H7", "F8:H8", "RISK ITEMS", f"{risk_lines:,}", red if risk_lines else green),
         ]
         for label_range, value_range, label, value, accent in summary_cards:
             merge_value(
@@ -1898,26 +1889,14 @@ def build_branch_request_excel(report_df):
         ws.row_dimensions[7].height = 19
         ws.row_dimensions[8].height = 27
 
-        merge_value(
-            ws, "A10:H10",
-            "Print basis: New Inventory = Current Inventory + Quantity Request. Average Daily Sales (Qty) is sourced directly from Raw_Data.",
-            fill=PatternFill("solid", fgColor=soft_indigo),
-            font=Font(italic=True, size=8, color=slate),
-            alignment=Alignment(horizontal="left", vertical="center", wrap_text=True),
-            border=thin_border,
-        )
-        ws.row_dimensions[10].height = 32
-
         # Multiple requested items for the selected branch are stacked vertically.
-        current_row = 12
+        # Printing is intentionally concise: request, inventory, status, class, and remarks only.
+        current_row = 10
         for item_no, (_, item) in enumerate(export_df.reset_index(drop=True).iterrows(), start=1):
             model = str(item.get("Model", "") or "").strip()
             status = str(item.get("Stock Status", "") or "").strip() or "N/A"
             status_class = stock_status_style_class(status)
             status_fill, status_font = status_colors.get(status_class, status_colors["neutral"])
-            request_check = str(item.get("Request Check", "") or "").strip()
-            is_valid = request_check.startswith("VALIDATED")
-
             merge_value(
                 ws, f"A{current_row}:H{current_row}",
                 f"ITEM {item_no:02d}  •  {model}",
@@ -1962,41 +1941,8 @@ def build_branch_request_excel(report_df):
             ws.row_dimensions[label_row].height = 18
             ws.row_dimensions[value_row].height = 25
 
-            label_row2 = current_row + 3
-            value_row2 = current_row + 4
-            labels2 = [
-                ("A", "B", "AVG DAILY SALES"),
-                ("C", "D", "CURRENT DOI"),
-                ("E", "F", "NEW INVENTORY"),
-                ("G", "H", "SUGGESTED TRANSFER"),
-            ]
-            values2 = [
-                ("A", "B", round(safe_request_number(item.get("Average Daily Sales (Qty)", 0), 0), 4) if pd.notna(item.get("Average Daily Sales (Qty)")) else "N/A"),
-                ("C", "D", round(safe_request_number(item.get("Current DoI", 0), 0), 2) if pd.notna(item.get("Current DoI")) else "N/A"),
-                ("E", "F", int(safe_request_number(item.get("New Inventory", 0), 0)) if pd.notna(item.get("New Inventory")) else "N/A"),
-                ("G", "H", int(safe_request_number(item.get("Suggested Transfer", 0), 0)) if pd.notna(item.get("Suggested Transfer")) else "N/A"),
-            ]
-            for start_col, end_col, label in labels2:
-                merge_value(
-                    ws, f"{start_col}{label_row2}:{end_col}{label_row2}", label,
-                    fill=PatternFill("solid", fgColor=light),
-                    font=Font(bold=True, size=7, color=muted),
-                    alignment=Alignment(horizontal="center", vertical="center"),
-                    border=thin_border,
-                )
-            for start_col, end_col, value in values2:
-                merge_value(
-                    ws, f"{start_col}{value_row2}:{end_col}{value_row2}", value,
-                    fill=PatternFill("solid", fgColor=white),
-                    font=Font(bold=True, size=10, color=navy),
-                    alignment=Alignment(horizontal="center", vertical="center", wrap_text=True),
-                    border=thin_border,
-                )
-            ws.row_dimensions[label_row2].height = 18
-            ws.row_dimensions[value_row2].height = 25
-
-            remarks_label_row = current_row + 5
-            remarks_value_row = current_row + 6
+            remarks_label_row = current_row + 3
+            remarks_value_row = current_row + 4
             merge_value(
                 ws, f"A{remarks_label_row}:H{remarks_label_row}", "REMARKS / JUSTIFICATION",
                 fill=PatternFill("solid", fgColor="FFF7ED"),
@@ -2015,45 +1961,7 @@ def build_branch_request_excel(report_df):
             ws.row_dimensions[remarks_label_row].height = 18
             ws.row_dimensions[remarks_value_row].height = 34
 
-            validation_row = current_row + 7
-            merge_value(
-                ws, f"A{validation_row}:B{validation_row}", "VALIDATION",
-                fill=PatternFill("solid", fgColor=light),
-                font=Font(bold=True, size=7, color=muted),
-                alignment=Alignment(horizontal="center", vertical="center"),
-                border=thin_border,
-            )
-            merge_value(
-                ws, f"C{validation_row}:H{validation_row}", request_check or "—",
-                fill=PatternFill("solid", fgColor="DCFCE7" if is_valid else "FEE2E2"),
-                font=Font(bold=True, size=8, color="166534" if is_valid else "B91C1C"),
-                alignment=Alignment(horizontal="left", vertical="center", wrap_text=True),
-                border=thin_border,
-            )
-            ws.row_dimensions[validation_row].height = 22
-
-            calc_row = current_row + 8
-            merge_value(
-                ws, f"A{calc_row}:B{calc_row}", "CALCULATION NOTE",
-                fill=PatternFill("solid", fgColor=light),
-                font=Font(bold=True, size=7, color=muted),
-                alignment=Alignment(horizontal="center", vertical="center"),
-                border=thin_border,
-            )
-            print_note = (
-                "New Inventory = Current Inventory + Quantity Request. "
-                "Average Daily Sales (Qty) is sourced from Raw_Data."
-            )
-            merge_value(
-                ws, f"C{calc_row}:H{calc_row}", print_note,
-                fill=PatternFill("solid", fgColor=white),
-                font=Font(size=8, color=slate),
-                alignment=Alignment(horizontal="left", vertical="center", wrap_text=True),
-                border=thin_border,
-            )
-            ws.row_dimensions[calc_row].height = 28
-
-            current_row = current_row + 10
+            current_row = current_row + 6
 
         signoff_row = current_row + 1
         merge_value(ws, f"A{signoff_row}:C{signoff_row}", "__________________________", alignment=Alignment(horizontal="center"), font=Font(size=9, color=slate))
@@ -2076,7 +1984,7 @@ def build_branch_request_excel(report_df):
         ws.page_margins.bottom = 0.45
         ws.page_margins.header = 0.18
         ws.page_margins.footer = 0.18
-        ws.print_title_rows = "1:10"
+        ws.print_title_rows = "1:8"
         ws.print_area = f"A1:H{signoff_row + 1}"
         ws.oddFooter.left.text = requesting_branch
         ws.oddFooter.center.text = "MUTI MC SCM • Branch Request Status"
