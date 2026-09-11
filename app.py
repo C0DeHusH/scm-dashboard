@@ -240,10 +240,6 @@ def set_scm_theme(theme_name):
     if theme_name in {"light", "dark"}:
         st.session_state["scm_theme"] = theme_name
 
-def toggle_scm_theme():
-    current_theme = st.session_state.get("scm_theme", "dark")
-    st.session_state["scm_theme"] = "light" if current_theme == "dark" else "dark"
-
 SCM_THEME = st.session_state["scm_theme"]
 SCM_IS_DARK = SCM_THEME == "dark"
 
@@ -257,6 +253,13 @@ PLOTLY_CHART_MUTED = "#94a3b8" if SCM_IS_DARK else "#64748b"
 PLOTLY_CHART_GRID = "rgba(148,163,184,0.12)" if SCM_IS_DARK else "rgba(15,23,42,0.08)"
 PLOTLY_CHART_AXIS = "rgba(148,163,184,0.20)" if SCM_IS_DARK else "rgba(15,23,42,0.14)"
 PLOTLY_BAR_CONFIG = {"displayModeBar": False, "displaylogo": False, "scrollZoom": False, "responsive": True}
+PLOTLY_EXPANDED_CONFIG = {
+    "displayModeBar": True,
+    "displaylogo": False,
+    "scrollZoom": True,
+    "responsive": True,
+    "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+}
 PLOTLY_FONT_FAMILY = "Aptos, Segoe UI, Arial, sans-serif"
 
 # Single source of truth for dashboard + PowerPoint KPI trend definitions.
@@ -479,23 +482,20 @@ st.markdown(
         .st-key-scm_executive_header > div {{ width: 100%; min-width: 0; }}
         .st-key-scm_executive_header [data-testid="stHorizontalBlock"] {{ align-items: flex-start !important; }}
         .st-key-scm_executive_header [data-testid="stVerticalBlock"] {{ gap: 0 !important; }}
-        .st-key-scm_header_theme_toggle {{ display: flex; justify-content: flex-end; align-items: flex-start; width: 100%; padding-top: 0.05rem; }}
-        .st-key-scm_header_theme_toggle [data-testid="stButton"] {{ width: auto !important; margin-left: auto !important; }}
-        .st-key-scm_theme_toggle button, .st-key-scm_header_theme_toggle button {{ width: 42px !important; min-width: 42px !important; max-width: 42px !important; height: 42px !important; min-height: 42px !important; padding: 0 !important; border-radius: 12px !important; border: 1px solid var(--scm-border) !important; background: var(--scm-surface) !important; color: var(--scm-text) !important; box-shadow: 0 5px 14px rgba(15, 23, 42, 0.10) !important; font-size: 1.16rem !important; font-weight: 900 !important; line-height: 1 !important; letter-spacing: 0 !important; transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease, background 150ms ease !important; }}
-        .st-key-scm_theme_toggle button:hover, .st-key-scm_header_theme_toggle button:hover {{ transform: translateY(-1px) !important; border-color: rgba(99, 102, 241, 0.62) !important; background: var(--scm-hover) !important; box-shadow: 0 8px 18px rgba(15, 23, 42, 0.14) !important; }}
-        .st-key-scm_theme_toggle button:focus, .st-key-scm_header_theme_toggle button:focus {{ outline: none !important; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16), 0 8px 18px rgba(15, 23, 42, 0.12) !important; }}
         .st-key-scm_header_logo {{ display: flex; align-items: center; justify-content: flex-start; min-height: 84px; padding-right: 0.35rem; }}
         .st-key-scm_header_logo [data-testid="stImage"] {{ margin: 0 !important; }}
         .st-key-scm_header_logo img {{ width: auto !important; max-width: 92px !important; max-height: 76px !important; object-fit: contain !important; filter: drop-shadow(0 6px 14px rgba(2, 6, 23, 0.18)); }}
         .st-key-scm_executive_header .hero-copy {{ display: block; width: 100%; min-width: 0; max-width: 100%; }}
-        @media (max-width: 760px) {{ .st-key-scm_executive_header {{ padding: 18px 18px 20px 20px; }} .st-key-scm_header_logo {{ min-height: 62px; }} .st-key-scm_header_logo img {{ max-width: 72px !important; max-height: 58px !important; }} .st-key-scm_theme_toggle button, .st-key-scm_header_theme_toggle button {{ width: 38px !important; min-width: 38px !important; max-width: 38px !important; height: 38px !important; min-height: 38px !important; border-radius: 10px !important; font-size: 1.02rem !important; }} }}
+        @media (max-width: 760px) {{ .st-key-scm_executive_header {{ padding: 18px 18px 20px 20px; }} .st-key-scm_header_logo {{ min-height: 62px; }} .st-key-scm_header_logo img {{ max-width: 72px !important; max-height: 58px !important; }} }}
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 # ---------------------------------------------------------
-# EXECUTIVE HEADER WITH OPTIONAL COMPANY LOGO + THEME TOGGLE
+# EXECUTIVE HEADER WITH OPTIONAL COMPANY LOGO
+# Theme controls are intentionally kept out of the hero banner and relocated
+# to the compact Display utility beside Data Control.
 # ---------------------------------------------------------
 COMPANY_LOGO_SOURCE = str(
     _secret("COMPANY_LOGO", "")
@@ -511,17 +511,14 @@ company_logo_available = bool(
     )
 )
 
-theme_toggle_icon = "🌙" if SCM_IS_DARK else "☀️"
-theme_toggle_help = "Dark mode is active • Click to switch to Light mode" if SCM_IS_DARK else "Light mode is active • Click to switch to Dark mode"
-
 with st.container(key="scm_executive_header"):
     if company_logo_available:
-        header_logo_col, header_copy_col, header_theme_col = st.columns([1.15, 10.35, 0.5], gap="small", vertical_alignment="top")
+        header_logo_col, header_copy_col = st.columns([1.15, 10.85], gap="small", vertical_alignment="top")
         with header_logo_col:
             with st.container(key="scm_header_logo"):
                 st.image(COMPANY_LOGO_SOURCE, width=92)
     else:
-        header_copy_col, header_theme_col = st.columns([11.5, 0.5], gap="small", vertical_alignment="top")
+        header_copy_col = st.container()
 
     with header_copy_col:
         st.markdown(
@@ -540,10 +537,6 @@ with st.container(key="scm_executive_header"):
             """,
             unsafe_allow_html=True,
         )
-
-    with header_theme_col:
-        with st.container(key="scm_header_theme_toggle"):
-            st.button(theme_toggle_icon, key="scm_theme_toggle", help=theme_toggle_help, width="content", on_click=toggle_scm_theme)
 
 # =========================================================
 # 3. DATA IMPORT & PROCESSING
@@ -815,6 +808,73 @@ def data_sync_dialog():
         st.cache_data.clear()
         _ = st.session_state.pop("scm_presentation_error", None)
         st.rerun()
+
+# =========================================================
+# 4B. GRAPH PRESENTATION — EXPAND / RETURN TO REGULAR DISPLAY
+# =========================================================
+@st.dialog("Expanded Graph Presentation", width="large")
+def expanded_graph_dialog(fig, presentation_title, chart_key):
+    """Open a focused large-format graph without changing the regular dashboard layout."""
+    st.markdown(
+        f"""
+        <div style="margin:0 0 0.6rem 0;">
+            <div style="font-size:0.66rem;font-weight:900;letter-spacing:0.09em;text-transform:uppercase;color:var(--scm-muted);">PRESENTATION VIEW</div>
+            <div style="font-size:1.15rem;font-weight:900;color:var(--scm-text);margin-top:0.12rem;">{html.escape(str(presentation_title))}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    expanded_fig = go.Figure(fig)
+    base_height = int(expanded_fig.layout.height or 420)
+    expanded_fig.update_layout(
+        height=min(max(base_height + 220, 640), 860),
+        margin=dict(
+            l=max(int(expanded_fig.layout.margin.l or 44), 54),
+            r=max(int(expanded_fig.layout.margin.r or 22), 34),
+            t=max(int(expanded_fig.layout.margin.t or 80), 90),
+            b=max(int(expanded_fig.layout.margin.b or 38), 54),
+        ),
+    )
+    _ = st.plotly_chart(
+        expanded_fig,
+        width="stretch",
+        config=PLOTLY_EXPANDED_CONFIG,
+        key=f"expanded_plot_{chart_key}",
+    )
+
+    return_col, hint_col = st.columns([1.35, 3.65], gap="small", vertical_alignment="center")
+    with return_col:
+        if st.button(
+            "↩ Return to Regular Display",
+            type="primary",
+            use_container_width=True,
+            key=f"return_regular_{chart_key}",
+        ):
+            st.rerun()
+    with hint_col:
+        st.caption("You can also close this presentation view with the × button. The regular graph remains unchanged underneath.")
+
+
+def render_expandable_chart(fig, chart_key, presentation_title):
+    """Render a normal chart plus a consistent Expand action."""
+    action_spacer, action_col = st.columns([4.8, 1.2], gap="small", vertical_alignment="center")
+    with action_col:
+        if st.button(
+            "⛶ Expand",
+            use_container_width=True,
+            key=f"expand_chart_{chart_key}",
+            help="Open this graph in a larger presentation view",
+        ):
+            expanded_graph_dialog(fig, presentation_title, chart_key)
+
+    _ = st.plotly_chart(
+        fig,
+        width="stretch",
+        config=PLOTLY_BAR_CONFIG,
+        key=f"regular_plot_{chart_key}",
+    )
+
 
 # =========================================================
 # 5. HELPERS — REDESIGNED VISUAL ENGINE + RESULT-PRESERVING AUDIT
@@ -2492,7 +2552,7 @@ tab_inventory, tab_branch_requests, tab_procurements = st.tabs([
 ])
 
 with tab_inventory:
-    trend_title_col, trend_action_col = st.columns([8.5, 1.5], vertical_alignment="bottom")
+    trend_title_col, trend_display_col, trend_action_col = st.columns([7.2, 1.35, 1.45], vertical_alignment="bottom")
     
     with trend_title_col:
         st.markdown(
@@ -2504,8 +2564,46 @@ with tab_inventory:
             """, unsafe_allow_html=True,
         )
 
+    # ---------------------------------------------------------
+    # DISPLAY SETTINGS — MOVED OUT OF THE EXECUTIVE HERO
+    # ---------------------------------------------------------
+    with trend_display_col:
+        st.markdown("<div class='data-sync-caption'>DISPLAY</div>", unsafe_allow_html=True)
+        with st.popover("⚙ Display ▾", use_container_width=True):
+            st.markdown(
+                "<div style='font-weight:850; font-size:0.76rem; color:var(--scm-muted); margin-bottom:0.35rem;'>APPEARANCE</div>",
+                unsafe_allow_html=True,
+            )
+            dark_col, light_col = st.columns(2, gap="small")
+            with dark_col:
+                if st.button(
+                    "🌙 Dark",
+                    type="primary" if SCM_IS_DARK else "secondary",
+                    use_container_width=True,
+                    key="display_theme_dark",
+                ):
+                    if not SCM_IS_DARK:
+                        set_scm_theme("dark")
+                        st.rerun()
+            with light_col:
+                if st.button(
+                    "☀ Light",
+                    type="primary" if not SCM_IS_DARK else "secondary",
+                    use_container_width=True,
+                    key="display_theme_light",
+                ):
+                    if SCM_IS_DARK:
+                        set_scm_theme("light")
+                        st.rerun()
+
+            st.markdown(
+                "<div style='font-weight:850; font-size:0.76rem; color:var(--scm-muted); margin:0.75rem 0 0.25rem;'>GRAPH PRESENTATION</div>",
+                unsafe_allow_html=True,
+            )
+            st.caption("Use ⛶ Expand on any graph for a larger focused view, then choose ↩ Return to Regular Display.")
+
     with trend_action_col:
-        st.markdown("<div class='data-sync-caption'>LATEST WORKBOOK</div>", unsafe_allow_html=True)
+        st.markdown("<div class='data-sync-caption'>DATA & EXPORT</div>", unsafe_allow_html=True)
         
         # ---------------------------------------------------------
         # ADMIN AUTHENTICATION GATING FOR DATA CONTROL
@@ -2515,7 +2613,6 @@ with tab_inventory:
                 admin_login_dialog()
         else:
             with st.popover("Data Control ▾", use_container_width=True):
-                # Convenient logout button at the top of the popover
                 if st.button("Logout", key="admin_logout", help="Sign out of Data Control"):
                     st.session_state["is_admin_logged_in"] = False
                     st.rerun()
@@ -2597,29 +2694,29 @@ with tab_inventory:
     row1_left, row1_right = st.columns(2, gap="small")
     with row1_left:
         with st.container(border=True):
-            _ = st.plotly_chart(create_styled_line_chart(kpi_data, "class_a_doi", "MC Class A DoI", "CLASS A DAYS OF INVENTORY", "#7c3aed", is_weekly=is_weekly, is_percentage=False, fill=True), width="stretch", config=PLOTLY_BAR_CONFIG)
+            render_expandable_chart(create_styled_line_chart(kpi_data, "class_a_doi", "MC Class A DoI", "CLASS A DAYS OF INVENTORY", "#7c3aed", is_weekly=is_weekly, is_percentage=False, fill=True), "trend_class_a_doi", "MC Class A DoI")
 
     with row1_right:
         with st.container(border=True):
-            _ = st.plotly_chart(create_styled_line_chart(kpi_data, "overall_doi", "Days of Inventory", "OVERALL INVENTORY COVERAGE", "#2563eb", is_weekly=is_weekly, is_percentage=False, fill=True), width="stretch", config=PLOTLY_BAR_CONFIG)
+            render_expandable_chart(create_styled_line_chart(kpi_data, "overall_doi", "Days of Inventory", "OVERALL INVENTORY COVERAGE", "#2563eb", is_weekly=is_weekly, is_percentage=False, fill=True), "trend_overall_doi", "Days of Inventory")
 
     row2_left, row2_right = st.columns(2, gap="small")
     with row2_left:
         with st.container(border=True):
-            _ = st.plotly_chart(create_styled_line_chart(kpi_data, "per_branch", "Per Branch OOS", "STOCKOUT RATE", "#0ea5e9", is_weekly=is_weekly, is_percentage=True), width="stretch", config=PLOTLY_BAR_CONFIG)
+            render_expandable_chart(create_styled_line_chart(kpi_data, "per_branch", "Per Branch OOS", "STOCKOUT RATE", "#0ea5e9", is_weekly=is_weekly, is_percentage=True), "trend_per_branch_oos", "Per Branch OOS")
 
     with row2_right:
         with st.container(border=True):
-            _ = st.plotly_chart(create_styled_line_chart(kpi_data, "class_a_out", "Overall Class A Rate", "CLASS A STOCKOUT RATE", "#f43f5e", is_weekly=is_weekly, is_percentage=True), width="stretch", config=PLOTLY_BAR_CONFIG)
+            render_expandable_chart(create_styled_line_chart(kpi_data, "class_a_out", "Overall Class A Rate", "CLASS A STOCKOUT RATE", "#f43f5e", is_weekly=is_weekly, is_percentage=True), "trend_class_a_oos", "Overall Class A Rate")
 
     row3_left, row3_right = st.columns(2, gap="small")
     with row3_left:
         with st.container(border=True):
-            _ = st.plotly_chart(create_styled_line_chart(kpi_data, "before_po", "Overall Before PO Balance", "STOCKOUT RATE BEFORE PO BALANCE", "#f59e0b", is_weekly=is_weekly, is_percentage=True), width="stretch", config=PLOTLY_BAR_CONFIG)
+            render_expandable_chart(create_styled_line_chart(kpi_data, "before_po", "Overall Before PO Balance", "STOCKOUT RATE BEFORE PO BALANCE", "#f59e0b", is_weekly=is_weekly, is_percentage=True), "trend_before_po", "Overall Before PO Balance")
 
     with row3_right:
         with st.container(border=True):
-            _ = st.plotly_chart(create_styled_line_chart(kpi_data, "after_po", "Overall After PO Balance", "STOCKOUT RATE AFTER PO BALANCE", "#10b981", is_weekly=is_weekly, is_percentage=True, fill=True), width="stretch", config=PLOTLY_BAR_CONFIG)
+            render_expandable_chart(create_styled_line_chart(kpi_data, "after_po", "Overall After PO Balance", "STOCKOUT RATE AFTER PO BALANCE", "#10b981", is_weekly=is_weekly, is_percentage=True, fill=True), "trend_after_po", "Overall After PO Balance")
 
     st.markdown("---")
 
@@ -2680,9 +2777,9 @@ with tab_inventory:
         fig_bar, fig_class_a = create_area_stockout_figures(area_rates_df)
         avg_col, class_a_col = st.columns(2, gap="small")
         with avg_col:
-            _ = st.plotly_chart(fig_bar, width="stretch", config=PLOTLY_BAR_CONFIG)
+            render_expandable_chart(fig_bar, "area_average_stockout", "Average Stock Out Rate per Area")
         with class_a_col:
-            _ = st.plotly_chart(fig_class_a, width="stretch", config=PLOTLY_BAR_CONFIG)
+            render_expandable_chart(fig_class_a, "area_class_a_stockout", "Class A Stock Out Rate per Area")
 
 
     # =========================================================
@@ -2704,13 +2801,13 @@ with tab_inventory:
             if high_class_a_branches.empty:
                 st.success("No branch has a Class A Stock Out Rate above 0% in this scope.")
             else:
-                _ = st.plotly_chart(fig_high_class_a, width="stretch", config=PLOTLY_BAR_CONFIG)
+                render_expandable_chart(fig_high_class_a, "class_a_high_risk", "Highest Class A Stock Out Rate")
 
         with zero_rank_col:
             if zero_class_a_branches.empty:
                 st.warning("No branch currently has a 0% Class A Stock Out Rate in this scope.")
             else:
-                _ = st.plotly_chart(fig_zero_class_a, width="stretch", config=PLOTLY_BAR_CONFIG)
+                render_expandable_chart(fig_zero_class_a, "class_a_zero_oos", "Branches with 0% Class A Stock Out Rate")
                 st.caption("Zero-stockout leaders are ordered by Class A stock-status coverage count; every branch shown has exactly 0% Class A Stock Out Rate.")
 
 
