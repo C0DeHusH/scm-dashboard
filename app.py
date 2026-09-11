@@ -556,15 +556,19 @@ def process_excel_file(file_path_or_buffer):
     if "class" in raw_df.columns:
         raw_df.rename(columns={"class": "pareto_class"}, inplace=True)
 
-    required_raw_cols = ["area", "branch", "pareto_class", "stock_status", "remaining_inventory", "suggested_transfer", "doi", "model"]
+    required_raw_cols = ["area", "branch", "pareto_class", "stock_status", "remaining_inventory", "suggested_transfer", "doi", "model", "average_daily_sales_(qty)"]
     missing_raw_cols = [col for col in required_raw_cols if col not in raw_df.columns]
     if missing_raw_cols:
         raise ValueError("Raw_Data is missing required column(s): " + ", ".join(missing_raw_cols))
 
-    # Keep inventory / transfer as whole units, but preserve Raw_Data DoI precision.
+    # Keep inventory / transfer as whole units, but preserve Raw_Data DoI and
+    # Average Daily Sales (Qty) precision for accurate request projection.
     for col in ["remaining_inventory", "suggested_transfer"]:
         raw_df[col] = round_series_half_up(pd.to_numeric(raw_df[col], errors="coerce").fillna(0)).fillna(0).astype(int)
     raw_df["doi"] = pd.to_numeric(raw_df["doi"], errors="coerce").fillna(0.0).astype(float)
+    raw_df["average_daily_sales_(qty)"] = pd.to_numeric(
+        raw_df["average_daily_sales_(qty)"], errors="coerce"
+    ).fillna(0.0).astype(float)
 
     raw_df["pareto_class"] = raw_df["pareto_class"].astype(str).str.strip()
     raw_df["stock_status"] = raw_df["stock_status"].fillna("").astype(str).str.strip()
@@ -1568,44 +1572,46 @@ def request_metric_card_html(title, value, footnote, color_theme="blue", icon="�
     )
 
 
-def calculate_projected_doi(current_inventory, current_doi, quantity_request):
+def calculate_projected_doi(current_inventory, average_daily_sales_qty, quantity_request):
     """
-    Project branch inventory coverage after the requested replenishment arrives.
+    Project branch inventory coverage using the updated Raw_Data demand field.
 
-    Raw_Data does not contain Average Daily Sales directly, so the function derives
-    an implied daily demand only when both current inventory and current DoI are
-    positive:
+        New Inventory = Current Inventory + Quantity Request
+        New DoI = New Inventory / Average Daily Sales (Qty)
 
-        Implied ADS = Current Inventory / Current DoI
-        New Inventory = Current Inventory + Request Quantity
-        New DoI = New Inventory / Implied ADS
-
-    If Raw_Data does not provide enough information to derive demand, New DoI is
-    intentionally left blank instead of inventing a value.
+    The system never derives or substitutes another demand rate. If
+    Average Daily Sales (Qty) is zero or blank, New DoI is intentionally
+    returned as unavailable (NaN).
     """
     current_inventory = safe_request_number(current_inventory, 0.0)
-    current_doi = safe_request_number(current_doi, 0.0)
+    average_daily_sales_qty = max(safe_request_number(average_daily_sales_qty, 0.0), 0.0)
     quantity_request = max(safe_request_number(quantity_request, 0.0), 0.0)
+
     new_inventory = current_inventory + quantity_request
 
-    if quantity_request == 0:
-        return new_inventory, current_doi, np.nan, "No additional request quantity; New DoI equals Current DoI."
+    if average_daily_sales_qty > 0:
+        new_doi = new_inventory / average_daily_sales_qty
+        return (
+            new_inventory,
+            new_doi,
+            average_daily_sales_qty,
+            "New DoI = (Current Inventory + Quantity Request) ÷ Average Daily Sales (Qty).",
+        )
 
-    if current_inventory > 0 and current_doi > 0:
-        implied_ads = current_inventory / current_doi
-        if implied_ads > 0:
-            new_doi = new_inventory / implied_ads
-            return new_inventory, new_doi, implied_ads, "Projected from Raw_Data Inventory ÷ Current DoI."
-
-    return new_inventory, np.nan, np.nan, "New DoI unavailable: Raw_Data has no positive Inventory/DoI basis to derive daily demand."
+    return (
+        new_inventory,
+        np.nan,
+        average_daily_sales_qty,
+        "New DoI unavailable because Average Daily Sales (Qty) is zero or blank in Raw_Data.",
+    )
 
 
 def build_branch_request_report(raw_data, request_lines):
     """Match Branch + Model request lines to Raw_Data and build the validation report."""
     report_columns = [
-        "Branch", "Model", "Request Quantity", "Inventory", "Stock Status",
-        "Current DoI", "New Inventory", "New DoI", "Remarks / Justification",
-        "Area", "Class", "Suggested Transfer", "Implied Avg Daily Sales",
+        "Branch", "Model", "Quantity Request", "Inventory", "Stock Status",
+        "Average Daily Sales (Qty)", "Current DoI", "New Inventory", "New DoI",
+        "Remarks / Justification", "Area", "Class", "Suggested Transfer",
         "Request Check", "Calculation Note"
     ]
 
@@ -1620,9 +1626,8 @@ def build_branch_request_report(raw_data, request_lines):
     for line in request_lines:
         branch = str(line.get("Branch", "") or "").strip()
         model = str(line.get("Model", "") or "").strip()
-        # Backward-compatible fallback supports request lines created by the previous version.
         request_quantity = int(max(safe_request_number(
-            line.get("Request Quantity", line.get("Quantity Request", line.get("Quantity", 0))),
+            line.get("Quantity Request", line.get("Request Quantity", line.get("Quantity", 0))),
             0.0,
         ), 0))
         remarks = str(line.get("Remarks / Justification", line.get("Remarks", "")) or "").strip()
@@ -1636,9 +1641,10 @@ def build_branch_request_report(raw_data, request_lines):
             results.append({
                 "Branch": branch,
                 "Model": model,
-                "Request Quantity": request_quantity,
+                "Quantity Request": request_quantity,
                 "Inventory": np.nan,
                 "Stock Status": "NOT FOUND",
+                "Average Daily Sales (Qty)": np.nan,
                 "Current DoI": np.nan,
                 "New Inventory": np.nan,
                 "New DoI": np.nan,
@@ -1646,7 +1652,6 @@ def build_branch_request_report(raw_data, request_lines):
                 "Area": "",
                 "Class": "",
                 "Suggested Transfer": np.nan,
-                "Implied Avg Daily Sales": np.nan,
                 "Request Check": "NOT FOUND IN RAW_DATA",
                 "Calculation Note": "No exact Branch + Model record was found in Raw_Data.",
             })
@@ -1655,9 +1660,11 @@ def build_branch_request_report(raw_data, request_lines):
         row = matched.iloc[0]
         current_inventory = safe_request_number(row.get("remaining_inventory", 0), 0.0)
         current_doi = safe_request_number(row.get("doi", 0), 0.0)
-        new_inventory, new_doi, implied_ads, calculation_note = calculate_projected_doi(
+        average_daily_sales_qty = safe_request_number(row.get("average_daily_sales_(qty)", 0), 0.0)
+
+        new_inventory, new_doi, ads_qty, calculation_note = calculate_projected_doi(
             current_inventory,
-            current_doi,
+            average_daily_sales_qty,
             request_quantity,
         )
 
@@ -1669,9 +1676,10 @@ def build_branch_request_report(raw_data, request_lines):
         results.append({
             "Branch": branch,
             "Model": model,
-            "Request Quantity": request_quantity,
+            "Quantity Request": request_quantity,
             "Inventory": int(round_half_up(current_inventory)),
             "Stock Status": str(row.get("stock_status", "") or "").strip(),
+            "Average Daily Sales (Qty)": round(ads_qty, 4),
             "Current DoI": round(current_doi, 2),
             "New Inventory": int(round_half_up(new_inventory)),
             "New DoI": round(new_doi, 2) if pd.notna(new_doi) else np.nan,
@@ -1679,7 +1687,6 @@ def build_branch_request_report(raw_data, request_lines):
             "Area": str(row.get("area", "") or "").strip(),
             "Class": str(row.get("pareto_class", "") or "").strip(),
             "Suggested Transfer": int(round_half_up(safe_request_number(row.get("suggested_transfer", 0), 0.0))),
-            "Implied Avg Daily Sales": round(implied_ads, 3) if pd.notna(implied_ads) else np.nan,
             "Request Check": request_check,
             "Calculation Note": calculation_note,
         })
@@ -1717,7 +1724,7 @@ def build_branch_request_excel(report_df):
 
     total_lines = len(export_df)
     total_request_qty = int(
-        pd.to_numeric(export_df.get("Request Quantity", pd.Series(dtype=float)), errors="coerce")
+        pd.to_numeric(export_df.get("Quantity Request", pd.Series(dtype=float)), errors="coerce")
         .fillna(0)
         .sum()
     )
@@ -1893,7 +1900,7 @@ def build_branch_request_excel(report_df):
 
         merge_value(
             ws, "A10:H10",
-            "Projection basis: New Inventory = Current Inventory + Request Quantity. New DoI uses the implied daily demand derived from Current Inventory ÷ Current DoI.",
+            "Projection basis: New Inventory = Current Inventory + Quantity Request. New DoI = New Inventory ÷ Average Daily Sales (Qty) from Raw_Data.",
             fill=PatternFill("solid", fgColor=soft_indigo),
             font=Font(italic=True, size=8, color=slate),
             alignment=Alignment(horizontal="left", vertical="center", wrap_text=True),
@@ -1926,14 +1933,14 @@ def build_branch_request_excel(report_df):
             labels = [
                 ("A", "B", "REQUEST QTY"),
                 ("C", "D", "CURRENT INVENTORY"),
-                ("E", "F", "CURRENT DOI"),
-                ("G", "H", "STOCK STATUS"),
+                ("E", "F", "STOCK STATUS"),
+                ("G", "H", "CLASS"),
             ]
             values = [
-                ("A", "B", int(safe_request_number(item.get("Request Quantity", 0), 0))),
+                ("A", "B", int(safe_request_number(item.get("Quantity Request", 0), 0))),
                 ("C", "D", int(safe_request_number(item.get("Inventory", 0), 0)) if pd.notna(item.get("Inventory")) else "N/A"),
-                ("E", "F", round(safe_request_number(item.get("Current DoI", 0), 0), 2) if pd.notna(item.get("Current DoI")) else "N/A"),
-                ("G", "H", status),
+                ("E", "F", status),
+                ("G", "H", str(item.get("Class", "") or "—")),
             ]
             for start_col, end_col, label in labels:
                 merge_value(
@@ -1944,7 +1951,7 @@ def build_branch_request_excel(report_df):
                     border=thin_border,
                 )
             for start_col, end_col, value in values:
-                is_status = start_col == "G"
+                is_status = start_col == "E"
                 merge_value(
                     ws, f"{start_col}{value_row}:{end_col}{value_row}", value,
                     fill=PatternFill("solid", fgColor=status_fill if is_status else white),
@@ -1958,16 +1965,16 @@ def build_branch_request_excel(report_df):
             label_row2 = current_row + 3
             value_row2 = current_row + 4
             labels2 = [
-                ("A", "B", "NEW INVENTORY"),
-                ("C", "D", "NEW DOI"),
-                ("E", "F", "CLASS"),
-                ("G", "H", "SUGGESTED TRANSFER"),
+                ("A", "B", "AVG DAILY SALES"),
+                ("C", "D", "CURRENT DOI"),
+                ("E", "F", "NEW INVENTORY"),
+                ("G", "H", "NEW DOI"),
             ]
             values2 = [
-                ("A", "B", int(safe_request_number(item.get("New Inventory", 0), 0)) if pd.notna(item.get("New Inventory")) else "N/A"),
-                ("C", "D", round(safe_request_number(item.get("New DoI", 0), 0), 2) if pd.notna(item.get("New DoI")) else "N/A"),
-                ("E", "F", str(item.get("Class", "") or "—")),
-                ("G", "H", int(safe_request_number(item.get("Suggested Transfer", 0), 0)) if pd.notna(item.get("Suggested Transfer")) else "N/A"),
+                ("A", "B", round(safe_request_number(item.get("Average Daily Sales (Qty)", 0), 0), 4) if pd.notna(item.get("Average Daily Sales (Qty)")) else "N/A"),
+                ("C", "D", round(safe_request_number(item.get("Current DoI", 0), 0), 2) if pd.notna(item.get("Current DoI")) else "N/A"),
+                ("E", "F", int(safe_request_number(item.get("New Inventory", 0), 0)) if pd.notna(item.get("New Inventory")) else "N/A"),
+                ("G", "H", round(safe_request_number(item.get("New DoI", 0), 0), 2) if pd.notna(item.get("New DoI")) else "N/A"),
             ]
             for start_col, end_col, label in labels2:
                 merge_value(
@@ -2461,7 +2468,7 @@ with tab_branch_requests:
     st.markdown("<br>", unsafe_allow_html=True)
     section_heading(
         "Branch Request Status",
-        "Branch-centered request validation • multiple requested models • automatic projection from Raw_Data",
+        "Branch + Model request validation • model dropdown • live Raw_Data projection",
     )
 
     request_source = raw_data.copy()
@@ -2473,14 +2480,12 @@ with tab_branch_requests:
     if not branch_options:
         st.warning("No Branch + Model records are available in Raw_Data.")
     else:
-        control_col, guide_col = st.columns([2.2, 4.8], gap="small")
-        with control_col:
-            request_branch = st.selectbox(
-                "REQUESTING BRANCH",
-                branch_options,
-                key="branch_request_branch_scope_v5",
-                help="The selected branch controls the entire request entry, on-screen report, and downloaded portrait report.",
-            )
+        request_branch = st.selectbox(
+            "REQUESTING BRANCH",
+            branch_options,
+            key="branch_request_branch_scope_v6",
+            help="Select the requesting branch. Model choices will be limited to this branch.",
+        )
 
         branch_source = (
             request_source.loc[request_source["branch"] == request_branch]
@@ -2488,175 +2493,379 @@ with tab_branch_requests:
             .sort_values(["pareto_class", "model"], na_position="last")
             .reset_index(drop=True)
         )
+
         branch_area = ""
-        area_values = [value for value in branch_source["area"].dropna().astype(str).str.strip().unique().tolist() if value]
+        area_values = [
+            value for value in branch_source["area"].dropna().astype(str).str.strip().unique().tolist()
+            if value
+        ]
         if area_values:
             branch_area = area_values[0]
 
-        with guide_col:
-            st.markdown(
-                """
-                <div class='import-dialog-note' style='margin-bottom:0;'>
-                    Enter the <b>Request Quantity</b> and <b>Remarks / Justification</b> directly in the request table below.
-                    The report updates automatically and includes every model with Request Quantity greater than zero.
-                    The display and download are limited to the selected branch only—not to one item.
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+        model_options = [""] + branch_source["model"].astype(str).tolist()
 
+        # Branch identity / scope header.
         st.markdown(
             f"""
-            <div style="margin:0.85rem 0 0.9rem 0; padding:1rem 1.15rem; border:1px solid var(--scm-border); border-left:5px solid #4f46e5; border-radius:14px; background:var(--scm-card-bg); box-shadow:var(--scm-theme-shadow);">
-                <div style="font-size:0.66rem; font-weight:900; letter-spacing:0.12em; text-transform:uppercase; color:var(--scm-muted);">REQUESTING BRANCH</div>
-                <div style="font-size:1.55rem; font-weight:900; line-height:1.15; color:var(--scm-text); margin-top:0.18rem;">{html.escape(request_branch)}</div>
-                <div style="font-size:0.76rem; color:var(--scm-muted); margin-top:0.28rem;">{html.escape(branch_area or 'Area not specified')} • {len(branch_source):,} available model(s) from Raw_Data</div>
+            <div style="
+                margin:0.65rem 0 1rem 0;
+                padding:1rem 1.15rem;
+                border:1px solid var(--scm-border);
+                border-left:5px solid #4f46e5;
+                border-radius:14px;
+                background:var(--scm-card-bg);
+                box-shadow:var(--scm-theme-shadow);
+            ">
+                <div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap;">
+                    <div>
+                        <div style="font-size:0.64rem;font-weight:900;letter-spacing:0.12em;text-transform:uppercase;color:var(--scm-muted);">
+                            REQUESTING BRANCH
+                        </div>
+                        <div style="font-size:1.52rem;font-weight:900;line-height:1.15;color:var(--scm-text);margin-top:0.18rem;">
+                            {html.escape(request_branch)}
+                        </div>
+                        <div style="font-size:0.76rem;color:var(--scm-muted);margin-top:0.25rem;">
+                            {html.escape(branch_area or 'Area not specified')} • {len(branch_source):,} model(s) available in dropdown
+                        </div>
+                    </div>
+                    <div style="max-width:520px;font-size:0.75rem;line-height:1.5;color:var(--scm-muted);">
+                        Add one or more request lines. Select each <b>Model</b> from the dropdown,
+                        enter <b>Quantity Request</b>, and provide <b>Remarks / Justification</b>.
+                        The validation report recalculates automatically.
+                    </div>
+                </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        section_heading("Request Entry", "Edit Request Quantity and Remarks only • status fields are sourced from Raw_Data")
+        section_heading(
+            "Request Builder",
+            "Add rows as needed • Model is a branch-filtered dropdown • duplicate models are not allowed",
+        )
 
-        editor_df = pd.DataFrame({
-            "Model": branch_source["model"].astype(str),
-            "Class": branch_source["pareto_class"].fillna("").astype(str),
-            "Inventory": pd.to_numeric(branch_source["remaining_inventory"], errors="coerce").fillna(0).astype(int),
-            "Stock Status": branch_source["stock_status"].fillna("").astype(str),
-            "Current DoI": pd.to_numeric(branch_source["doi"], errors="coerce").fillna(0.0).round(2),
-            "Request Quantity": 0,
-            "Remarks / Justification": "",
-        })
+        editor_seed = pd.DataFrame([
+            {"Model": "", "Quantity Request": 0, "Remarks / Justification": ""}
+        ])
 
-        editor_key = "branch_request_editor_" + hashlib.md5(request_branch.encode("utf-8")).hexdigest()[:10]
+        editor_key = "branch_request_dropdown_editor_" + hashlib.md5(
+            request_branch.encode("utf-8")
+        ).hexdigest()[:10]
+
         edited_requests = st.data_editor(
-            editor_df,
+            editor_seed,
             hide_index=True,
             width="stretch",
-            num_rows="fixed",
-            disabled=["Model", "Class", "Inventory", "Stock Status", "Current DoI"],
+            num_rows="dynamic",
             key=editor_key,
             column_config={
-                "Model": st.column_config.TextColumn("MODEL", width="medium"),
-                "Class": st.column_config.TextColumn("CLASS", width="small"),
-                "Inventory": st.column_config.NumberColumn("INVENTORY", format="%d", width="small"),
-                "Stock Status": st.column_config.TextColumn("STOCK STATUS", width="small"),
-                "Current DoI": st.column_config.NumberColumn("CURRENT DOI", format="%.2f", width="small"),
-                "Request Quantity": st.column_config.NumberColumn(
+                "Model": st.column_config.SelectboxColumn(
+                    "MODEL",
+                    options=model_options,
+                    required=False,
+                    width="medium",
+                    help="Choose a motorcycle model available for the selected branch.",
+                ),
+                "Quantity Request": st.column_config.NumberColumn(
                     "REQUEST QUANTITY",
                     min_value=0,
                     step=1,
                     format="%d",
                     width="small",
-                    help="Enter the quantity requested for this model.",
+                    help="Quantity requested for the selected model.",
                 ),
                 "Remarks / Justification": st.column_config.TextColumn(
                     "REMARKS / JUSTIFICATION",
                     width="large",
-                    help="State the operational reason for the request.",
+                    help="Operational justification for the request.",
                 ),
             },
         )
 
-        edited_requests["Request Quantity"] = (
-            pd.to_numeric(edited_requests["Request Quantity"], errors="coerce").fillna(0).clip(lower=0).round().astype(int)
+        edited_requests["Model"] = edited_requests["Model"].fillna("").astype(str).str.strip()
+        edited_requests["Quantity Request"] = (
+            pd.to_numeric(edited_requests["Quantity Request"], errors="coerce")
+            .fillna(0)
+            .clip(lower=0)
+            .round()
+            .astype(int)
         )
-        active_requests = edited_requests[edited_requests["Request Quantity"] > 0].copy()
+        edited_requests["Remarks / Justification"] = (
+            edited_requests["Remarks / Justification"].fillna("").astype(str)
+        )
 
-        if active_requests.empty:
+        active_requests = edited_requests[
+            (edited_requests["Model"] != "")
+            & (edited_requests["Quantity Request"] > 0)
+        ].copy()
+
+        # Enforce one request line per model so totals and justification remain unambiguous.
+        active_requests["_model_key"] = active_requests["Model"].map(normalize_request_key)
+        duplicate_mask = active_requests["_model_key"].duplicated(keep=False)
+
+        if duplicate_mask.any():
+            duplicate_models = sorted(active_requests.loc[duplicate_mask, "Model"].unique().tolist())
+            st.error(
+                "Duplicate model request line(s) detected: "
+                + ", ".join(duplicate_models)
+                + ". Keep each model once and update its quantity in a single row."
+            )
+        elif active_requests.empty:
             st.info(
-                "Enter a Request Quantity greater than zero for one or more models. "
-                "The Branch Request Status report will generate automatically below."
+                "Select a model from the dropdown and enter a Quantity Request greater than zero. "
+                "Use the + row control to add more requested models for the same branch."
             )
         else:
             request_lines = [
                 {
                     "Branch": request_branch,
                     "Model": str(row["Model"]),
-                    "Request Quantity": int(row["Request Quantity"]),
+                    "Quantity Request": int(row["Quantity Request"]),
                     "Remarks / Justification": str(row["Remarks / Justification"] or "").strip(),
                 }
                 for _, row in active_requests.iterrows()
             ]
+
             request_report = build_branch_request_report(request_source, request_lines)
 
             st.markdown("---")
             section_heading(
-                "Generated Branch Request Report",
-                f"Automatic update • {request_branch} • {len(request_report):,} requested item(s)",
+                "Live Request Validation",
+                f"{request_branch} • {len(request_report):,} requested item(s) • automatically recalculated",
             )
 
             total_lines = len(request_report)
-            total_requested = int(pd.to_numeric(request_report["Request Quantity"], errors="coerce").fillna(0).sum())
-            risk_mask = request_report["Stock Status"].fillna("").astype(str).map(stock_status_style_class).isin(["stockout", "critical", "low"])
+            total_requested = int(
+                pd.to_numeric(request_report["Quantity Request"], errors="coerce").fillna(0).sum()
+            )
+            risk_mask = (
+                request_report["Stock Status"]
+                .fillna("")
+                .astype(str)
+                .map(stock_status_style_class)
+                .isin(["stockout", "critical", "low"])
+            )
             risk_lines = int(risk_mask.sum())
-            remarks_count = int(request_report["Remarks / Justification"].fillna("").astype(str).str.strip().ne("").sum())
+            missing_ads = int(
+                pd.to_numeric(
+                    request_report["Average Daily Sales (Qty)"], errors="coerce"
+                ).fillna(0).le(0).sum()
+            )
 
             k1, k2, k3, k4 = st.columns(4, gap="small")
-            k1.markdown(request_metric_card_html("REQUESTED ITEMS", f"{total_lines:,}", "MODELS INCLUDED", "blue", "#"), unsafe_allow_html=True)
-            k2.markdown(request_metric_card_html("TOTAL REQUEST QTY", f"{total_requested:,}", "REQUESTED UNITS", "green", "Q"), unsafe_allow_html=True)
-            k3.markdown(request_metric_card_html("RISK ITEMS", f"{risk_lines:,}", "STOCKOUT / CRITICAL / LOW", "red" if risk_lines else "green", "!"), unsafe_allow_html=True)
-            k4.markdown(request_metric_card_html("JUSTIFIED", f"{remarks_count:,}/{total_lines:,}", "WITH REMARKS", "blue", "R"), unsafe_allow_html=True)
+            k1.markdown(
+                request_metric_card_html("REQUESTED MODELS", f"{total_lines:,}", "ITEMS", "blue", "#"),
+                unsafe_allow_html=True,
+            )
+            k2.markdown(
+                request_metric_card_html("TOTAL REQUEST QTY", f"{total_requested:,}", "UNITS", "green", "Q"),
+                unsafe_allow_html=True,
+            )
+            k3.markdown(
+                request_metric_card_html(
+                    "RISK ITEMS",
+                    f"{risk_lines:,}",
+                    "STOCKOUT / CRITICAL / LOW",
+                    "red" if risk_lines else "green",
+                    "!",
+                ),
+                unsafe_allow_html=True,
+            )
+            k4.markdown(
+                request_metric_card_html(
+                    "ADS DATA ISSUE",
+                    f"{missing_ads:,}",
+                    "ZERO / BLANK ADS",
+                    "red" if missing_ads else "green",
+                    "A",
+                ),
+                unsafe_allow_html=True,
+            )
 
-            st.markdown("<div style='height:0.35rem'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='height:0.45rem'></div>", unsafe_allow_html=True)
 
-            # Portrait-inspired on-screen presentation: each model is a vertical card, not one wide report row.
+            # Redesigned model cards: current position vs. after-request projection.
             for item_no, (_, row) in enumerate(request_report.iterrows(), start=1):
                 status_text = str(row.get("Stock Status", "") or "N/A")
                 status_class = stock_status_style_class(status_text)
-                status_tone = "red" if status_class == "stockout" else "yellow" if status_class in {"critical", "low"} else "green"
+                status_color = {
+                    "stockout": "#dc2626",
+                    "critical": "#ea580c",
+                    "low": "#ca8a04",
+                    "ok": "#16a34a",
+                    "overstock": "#0284c7",
+                    "neutral": "#64748b",
+                }.get(status_class, "#64748b")
+                status_bg = {
+                    "stockout": "rgba(220,38,38,0.10)",
+                    "critical": "rgba(234,88,12,0.10)",
+                    "low": "rgba(202,138,4,0.10)",
+                    "ok": "rgba(22,163,74,0.10)",
+                    "overstock": "rgba(2,132,199,0.10)",
+                    "neutral": "rgba(100,116,139,0.10)",
+                }.get(status_class, "rgba(100,116,139,0.10)")
+
+                ads_value = row.get("Average Daily Sales (Qty)")
+                ads_display = f"{float(ads_value):.4f}" if pd.notna(ads_value) else "N/A"
+                current_doi_display = (
+                    f"{float(row['Current DoI']):.2f}"
+                    if pd.notna(row.get("Current DoI"))
+                    else "N/A"
+                )
+                new_doi_display = (
+                    f"{float(row['New DoI']):.2f}"
+                    if pd.notna(row.get("New DoI"))
+                    else "N/A"
+                )
+                inventory_display = (
+                    f"{int(row['Inventory']):,}"
+                    if pd.notna(row.get("Inventory"))
+                    else "N/A"
+                )
+                new_inventory_display = (
+                    f"{int(row['New Inventory']):,}"
+                    if pd.notna(row.get("New Inventory"))
+                    else "N/A"
+                )
+                remarks_text = (
+                    str(row.get("Remarks / Justification", "") or "").strip()
+                    or "No justification entered."
+                )
 
                 with st.container(border=True):
-                    head_left, head_right = st.columns([4.7, 1.3], gap="small", vertical_alignment="center")
-                    with head_left:
-                        st.markdown(
-                            f"""
-                            <div style="font-size:0.63rem;font-weight:900;letter-spacing:0.11em;text-transform:uppercase;color:var(--scm-muted);">ITEM {item_no:02d}</div>
-                            <div style="font-size:1.12rem;font-weight:900;color:var(--scm-text);margin-top:0.12rem;">{html.escape(str(row['Model']))}</div>
-                            <div style="font-size:0.72rem;color:var(--scm-muted);margin-top:0.12rem;">{html.escape(str(row.get('Class', '') or 'Unclassified'))}</div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
-                    with head_right:
-                        st.markdown(
-                            request_metric_card_html("STOCK STATUS", status_text, "CURRENT STATUS", status_tone, "S"),
-                            unsafe_allow_html=True,
-                        )
-
-                    m1, m2, m3, m4, m5 = st.columns(5, gap="small")
-                    m1.markdown(request_metric_card_html("REQUEST QTY", f"{int(row['Request Quantity']):,}", "REQUESTED", "blue", "Q"), unsafe_allow_html=True)
-                    m2.markdown(request_metric_card_html("CURRENT INV", f"{int(row['Inventory']):,}" if pd.notna(row["Inventory"]) else "N/A", "RAW_DATA", "blue", "I"), unsafe_allow_html=True)
-                    m3.markdown(request_metric_card_html("NEW INV", f"{int(row['New Inventory']):,}" if pd.notna(row["New Inventory"]) else "N/A", "AFTER REQUEST", "green", "+"), unsafe_allow_html=True)
-                    m4.markdown(request_metric_card_html("CURRENT DOI", f"{float(row['Current DoI']):.2f}" if pd.notna(row["Current DoI"]) else "N/A", "DAYS", "blue", "D"), unsafe_allow_html=True)
-                    m5.markdown(request_metric_card_html("NEW DOI", f"{float(row['New DoI']):.2f}" if pd.notna(row["New DoI"]) else "N/A", "PROJECTED", "green", "N"), unsafe_allow_html=True)
-
-                    remarks_text = str(row.get("Remarks / Justification", "") or "").strip() or "No justification entered."
                     st.markdown(
                         f"""
-                        <div style="margin-top:0.45rem;padding:0.72rem 0.82rem;border-radius:10px;border:1px solid rgba(245,158,11,0.24);background:rgba(245,158,11,0.06);">
-                            <div style="font-size:0.62rem;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;color:#d97706;">Remarks / Justification</div>
-                            <div style="font-size:0.80rem;line-height:1.45;color:var(--scm-text);margin-top:0.18rem;">{html.escape(remarks_text)}</div>
+                        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;">
+                            <div>
+                                <div style="font-size:0.60rem;font-weight:900;letter-spacing:0.11em;text-transform:uppercase;color:var(--scm-muted);">
+                                    REQUEST ITEM {item_no:02d}
+                                </div>
+                                <div style="font-size:1.18rem;font-weight:900;color:var(--scm-text);margin-top:0.12rem;">
+                                    {html.escape(str(row['Model']))}
+                                </div>
+                                <div style="font-size:0.72rem;color:var(--scm-muted);margin-top:0.10rem;">
+                                    {html.escape(str(row.get('Class', '') or 'Unclassified'))}
+                                </div>
+                            </div>
+                            <div style="
+                                display:inline-flex;align-items:center;
+                                padding:0.42rem 0.72rem;border-radius:999px;
+                                background:{status_bg};color:{status_color};
+                                border:1px solid {status_color}55;
+                                font-size:0.70rem;font-weight:900;text-transform:uppercase;
+                            ">
+                                {html.escape(status_text)}
+                            </div>
                         </div>
                         """,
                         unsafe_allow_html=True,
                     )
 
+                    current_col, arrow_col, projected_col = st.columns(
+                        [3.1, 0.55, 3.1], gap="small", vertical_alignment="center"
+                    )
+
+                    with current_col:
+                        st.markdown(
+                            f"""
+                            <div style="padding:0.82rem 0.90rem;border-radius:12px;border:1px solid var(--scm-border);background:var(--scm-surface-2);">
+                                <div style="font-size:0.61rem;font-weight:900;letter-spacing:0.09em;text-transform:uppercase;color:var(--scm-muted);margin-bottom:0.55rem;">
+                                    CURRENT POSITION
+                                </div>
+                                <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0.65rem;">
+                                    <div>
+                                        <div style="font-size:0.60rem;color:var(--scm-muted);">Inventory</div>
+                                        <div style="font-size:1.08rem;font-weight:900;color:var(--scm-text);">{inventory_display}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size:0.60rem;color:var(--scm-muted);">Avg Daily Sales</div>
+                                        <div style="font-size:1.08rem;font-weight:900;color:var(--scm-text);">{ads_display}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size:0.60rem;color:var(--scm-muted);">Current DoI</div>
+                                        <div style="font-size:1.08rem;font-weight:900;color:var(--scm-text);">{current_doi_display}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+
+                    with arrow_col:
+                        st.markdown(
+                            "<div style='text-align:center;font-size:1.55rem;font-weight:900;color:#6366f1;'>→</div>",
+                            unsafe_allow_html=True,
+                        )
+
+                    with projected_col:
+                        st.markdown(
+                            f"""
+                            <div style="padding:0.82rem 0.90rem;border-radius:12px;border:1px solid rgba(16,185,129,0.28);background:rgba(16,185,129,0.055);">
+                                <div style="font-size:0.61rem;font-weight:900;letter-spacing:0.09em;text-transform:uppercase;color:#059669;margin-bottom:0.55rem;">
+                                    AFTER REQUEST
+                                </div>
+                                <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0.65rem;">
+                                    <div>
+                                        <div style="font-size:0.60rem;color:var(--scm-muted);">Request Qty</div>
+                                        <div style="font-size:1.08rem;font-weight:900;color:var(--scm-text);">{int(row['Quantity Request']):,}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size:0.60rem;color:var(--scm-muted);">New Inventory</div>
+                                        <div style="font-size:1.08rem;font-weight:900;color:var(--scm-text);">{new_inventory_display}</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size:0.60rem;color:var(--scm-muted);">New DoI</div>
+                                        <div style="font-size:1.08rem;font-weight:900;color:#059669;">{new_doi_display}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+
+                    st.markdown(
+                        f"""
+                        <div style="margin-top:0.55rem;padding:0.70rem 0.82rem;border-radius:10px;border:1px solid rgba(245,158,11,0.24);background:rgba(245,158,11,0.055);">
+                            <div style="font-size:0.60rem;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;color:#d97706;">
+                                REMARKS / JUSTIFICATION
+                            </div>
+                            <div style="font-size:0.79rem;line-height:1.45;color:var(--scm-text);margin-top:0.18rem;">
+                                {html.escape(remarks_text)}
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+                    if pd.isna(row.get("New DoI")):
+                        st.warning(
+                            f"{row['Model']}: New DoI cannot be calculated because "
+                            "Average Daily Sales (Qty) is zero or blank in Raw_Data."
+                        )
+
             st.markdown("<div style='height:0.45rem'></div>", unsafe_allow_html=True)
-            download_col1, download_col2, note_col = st.columns([1.55, 1.15, 3.8], gap="small")
+            download_col1, download_col2, note_col = st.columns(
+                [1.55, 1.15, 3.8], gap="small"
+            )
+
             with download_col1:
                 try:
                     portrait_xlsx = build_branch_request_excel(request_report)
-                    safe_branch = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in request_branch).strip("_") or "Branch"
+                    safe_branch = "".join(
+                        ch if ch.isalnum() or ch in {"-", "_"} else "_"
+                        for ch in request_branch
+                    ).strip("_") or "Branch"
                     st.download_button(
                         "⬇ Download Portrait Excel",
                         data=portrait_xlsx,
                         file_name=f"Branch_Request_{safe_branch}_{date.today().strftime('%Y%m%d')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         use_container_width=True,
-                        key="branch_request_download_portrait_xlsx_v5",
+                        key="branch_request_download_portrait_xlsx_v6",
                     )
                 except Exception as exc:
                     st.error(f"Excel export unavailable: {exc}")
+
             with download_col2:
                 branch_request_csv = request_report.to_csv(index=False).encode("utf-8-sig")
                 st.download_button(
@@ -2665,11 +2874,13 @@ with tab_branch_requests:
                     file_name=f"Branch_Request_{date.today().strftime('%Y%m%d')}.csv",
                     mime="text/csv",
                     use_container_width=True,
-                    key="branch_request_download_csv_v5",
+                    key="branch_request_download_csv_v6",
                 )
+
             with note_col:
                 st.caption(
-                    "Excel is formatted for A4 Portrait. It shows the requesting branch at the top and stacks all requested models vertically so multiple items remain readable when printed."
+                    "New DoI uses the updated Raw_Data field Average Daily Sales (Qty). "
+                    "The Excel report remains A4 Portrait and includes all requested models for the selected branch."
                 )
 
             with st.expander("View Full Validation Data"):
