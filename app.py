@@ -561,8 +561,10 @@ def process_excel_file(file_path_or_buffer):
     if missing_raw_cols:
         raise ValueError("Raw_Data is missing required column(s): " + ", ".join(missing_raw_cols))
 
-    for col in ["remaining_inventory", "suggested_transfer", "doi"]:
+    # Keep inventory / transfer as whole units, but preserve Raw_Data DoI precision.
+    for col in ["remaining_inventory", "suggested_transfer"]:
         raw_df[col] = round_series_half_up(pd.to_numeric(raw_df[col], errors="coerce").fillna(0)).fillna(0).astype(int)
+    raw_df["doi"] = pd.to_numeric(raw_df["doi"], errors="coerce").fillna(0.0).astype(float)
 
     raw_df["pareto_class"] = raw_df["pareto_class"].astype(str).str.strip()
     raw_df["stock_status"] = raw_df["stock_status"].fillna("").astype(str).str.strip()
@@ -1545,9 +1547,249 @@ def cached_scm_presentation(workbook_bytes, selected_area, theme_name):
 
 
 # =========================================================
+# BRANCH REQUEST STATUS HELPERS
+# =========================================================
+def normalize_request_key(value):
+    return " ".join(str(value or "").strip().casefold().split())
+
+
+def safe_request_number(value, default=0.0):
+    numeric = pd.to_numeric(value, errors="coerce")
+    return float(numeric) if pd.notna(numeric) else float(default)
+
+
+def request_metric_card_html(title, value, footnote, color_theme="blue", icon="•"):
+    return (
+        "<div class='metric-card-base'>"
+        f"<div class='metric-header'>{html.escape(str(title))}<div class='icon-box'>{html.escape(str(icon))}</div></div>"
+        f"<div class='metric-value'>{html.escape(str(value))}</div>"
+        f"<div><span class='badge badge-{html.escape(str(color_theme))}'>{html.escape(str(footnote))}</span></div>"
+        "</div>"
+    )
+
+
+def calculate_projected_doi(current_inventory, current_doi, quantity_request):
+    """
+    Project branch inventory coverage after the requested replenishment arrives.
+
+    Raw_Data does not contain Average Daily Sales directly, so the function derives
+    an implied daily demand only when both current inventory and current DoI are
+    positive:
+
+        Implied ADS = Current Inventory / Current DoI
+        New Inventory = Current Inventory + Quantity Request
+        New DoI = New Inventory / Implied ADS
+
+    If Raw_Data does not provide enough information to derive demand, New DoI is
+    intentionally left blank instead of inventing a value.
+    """
+    current_inventory = safe_request_number(current_inventory, 0.0)
+    current_doi = safe_request_number(current_doi, 0.0)
+    quantity_request = max(safe_request_number(quantity_request, 0.0), 0.0)
+    new_inventory = current_inventory + quantity_request
+
+    if quantity_request == 0:
+        return new_inventory, current_doi, np.nan, "No additional request quantity; New DoI equals Current DoI."
+
+    if current_inventory > 0 and current_doi > 0:
+        implied_ads = current_inventory / current_doi
+        if implied_ads > 0:
+            new_doi = new_inventory / implied_ads
+            return new_inventory, new_doi, implied_ads, "Projected from Raw_Data Inventory ÷ Current DoI."
+
+    return new_inventory, np.nan, np.nan, "New DoI unavailable: Raw_Data has no positive Inventory/DoI basis to derive daily demand."
+
+
+def build_branch_request_report(raw_data, request_lines):
+    """Match Branch + Model request lines to Raw_Data and build the validation report."""
+    report_columns = [
+        "Branch", "Model", "Quantity", "Quantity Request", "Inventory", "Stock Status",
+        "Current DoI", "New Inventory", "New DoI", "Area", "Class",
+        "Suggested Transfer", "Implied Avg Daily Sales", "Request Check", "Calculation Note"
+    ]
+
+    if raw_data is None or raw_data.empty or not request_lines:
+        return pd.DataFrame(columns=report_columns)
+
+    source = raw_data.copy()
+    source["_branch_key"] = source["branch"].map(normalize_request_key)
+    source["_model_key"] = source["model"].map(normalize_request_key)
+
+    results = []
+    for line in request_lines:
+        branch = str(line.get("Branch", "") or "").strip()
+        model = str(line.get("Model", "") or "").strip()
+        quantity = int(max(safe_request_number(line.get("Quantity", 0), 0.0), 0))
+        quantity_request = int(max(safe_request_number(line.get("Quantity Request", 0), 0.0), 0))
+
+        matched = source[
+            (source["_branch_key"] == normalize_request_key(branch))
+            & (source["_model_key"] == normalize_request_key(model))
+        ]
+
+        if matched.empty:
+            results.append({
+                "Branch": branch,
+                "Model": model,
+                "Quantity": quantity,
+                "Quantity Request": quantity_request,
+                "Inventory": np.nan,
+                "Stock Status": "NOT FOUND",
+                "Current DoI": np.nan,
+                "New Inventory": np.nan,
+                "New DoI": np.nan,
+                "Area": "",
+                "Class": "",
+                "Suggested Transfer": np.nan,
+                "Implied Avg Daily Sales": np.nan,
+                "Request Check": "NOT FOUND IN RAW_DATA",
+                "Calculation Note": "No exact Branch + Model record was found in Raw_Data.",
+            })
+            continue
+
+        row = matched.iloc[0]
+        current_inventory = safe_request_number(row.get("remaining_inventory", 0), 0.0)
+        current_doi = safe_request_number(row.get("doi", 0), 0.0)
+        new_inventory, new_doi, implied_ads, calculation_note = calculate_projected_doi(
+            current_inventory,
+            current_doi,
+            quantity_request,
+        )
+
+        request_check = "VALIDATED"
+        if len(matched) > 1:
+            request_check = f"VALIDATED • {len(matched)} SOURCE RECORDS"
+            calculation_note += " Multiple matching Raw_Data records exist; the first exact match is shown."
+
+        results.append({
+            "Branch": branch,
+            "Model": model,
+            "Quantity": quantity,
+            "Quantity Request": quantity_request,
+            "Inventory": int(round_half_up(current_inventory)),
+            "Stock Status": str(row.get("stock_status", "") or "").strip(),
+            "Current DoI": round(current_doi, 2),
+            "New Inventory": int(round_half_up(new_inventory)),
+            "New DoI": round(new_doi, 2) if pd.notna(new_doi) else np.nan,
+            "Area": str(row.get("area", "") or "").strip(),
+            "Class": str(row.get("pareto_class", "") or "").strip(),
+            "Suggested Transfer": int(round_half_up(safe_request_number(row.get("suggested_transfer", 0), 0.0))),
+            "Implied Avg Daily Sales": round(implied_ads, 3) if pd.notna(implied_ads) else np.nan,
+            "Request Check": request_check,
+            "Calculation Note": calculation_note,
+        })
+
+    return pd.DataFrame(results, columns=report_columns)
+
+
+def build_branch_request_excel(report_df):
+    """Create a formatted downloadable Excel report in memory."""
+    output = io.BytesIO()
+    try:
+        from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
+        from openpyxl.utils import get_column_letter
+    except Exception as exc:
+        raise RuntimeError("Excel report export requires openpyxl.") from exc
+
+    export_df = report_df.copy()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        export_df.to_excel(writer, sheet_name="Branch Request Status", index=False, startrow=3)
+        ws = writer.book["Branch Request Status"]
+        header_row = 4
+
+        ws["A1"] = "BRANCH REQUEST STATUS REPORT"
+        ws["A2"] = f"Generated: {datetime.now().strftime('%d %b %Y %I:%M %p')}"
+        ws["A3"] = "Source: Active Raw_Data sheet • New DoI includes Quantity Request as projected incoming inventory."
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max(1, len(export_df.columns)))
+        ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=max(1, len(export_df.columns)))
+        ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=max(1, len(export_df.columns)))
+
+        ws["A1"].font = Font(bold=True, size=16, color="FFFFFF")
+        ws["A1"].fill = PatternFill("solid", fgColor="0F172A")
+        ws["A1"].alignment = Alignment(horizontal="left", vertical="center")
+        ws["A2"].font = Font(size=10, color="475569")
+        ws["A3"].font = Font(size=9, italic=True, color="64748B")
+        ws["A3"].alignment = Alignment(wrap_text=True)
+        ws.row_dimensions[1].height = 28
+        ws.row_dimensions[3].height = 28
+
+        header_fill = PatternFill("solid", fgColor="4F46E5")
+        header_font = Font(bold=True, color="FFFFFF")
+        thin = Side(style="thin", color="D6DBE5")
+        for cell in ws[header_row]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            cell.border = Border(bottom=thin)
+        ws.row_dimensions[header_row].height = 30
+
+        status_colors = {
+            "stockout": "FEE2E2",
+            "critical": "FFEDD5",
+            "low": "FEF3C7",
+            "ok": "DCFCE7",
+            "over": "E0F2FE",
+            "overstock": "E0F2FE",
+        }
+
+        stock_status_col = None
+        request_check_col = None
+        current_doi_col = None
+        new_doi_col = None
+        for idx, col_name in enumerate(export_df.columns, start=1):
+            if col_name == "Stock Status": stock_status_col = idx
+            if col_name == "Request Check": request_check_col = idx
+            if col_name == "Current DoI": current_doi_col = idx
+            if col_name == "New DoI": new_doi_col = idx
+
+        for row_idx in range(header_row + 1, header_row + 1 + len(export_df)):
+            for col_idx in range(1, len(export_df.columns) + 1):
+                cell = ws.cell(row=row_idx, column=col_idx)
+                cell.alignment = Alignment(vertical="top", wrap_text=True)
+                cell.border = Border(bottom=Side(style="hair", color="E5E7EB"))
+
+            if stock_status_col:
+                status_cell = ws.cell(row=row_idx, column=stock_status_col)
+                status_key = normalize_request_key(status_cell.value).replace(" ", "")
+                fill_key = "overstock" if status_key in {"overstock", "over"} else status_key
+                if fill_key in status_colors:
+                    status_cell.fill = PatternFill("solid", fgColor=status_colors[fill_key])
+                    status_cell.font = Font(bold=True)
+
+            if request_check_col:
+                check_cell = ws.cell(row=row_idx, column=request_check_col)
+                check_cell.font = Font(bold=True, color="166534" if str(check_cell.value).startswith("VALIDATED") else "B91C1C")
+
+        for doi_col in [current_doi_col, new_doi_col]:
+            if doi_col:
+                for row_idx in range(header_row + 1, header_row + 1 + len(export_df)):
+                    ws.cell(row=row_idx, column=doi_col).number_format = "0.00"
+
+        width_map = {
+            "Branch": 24, "Model": 24, "Quantity": 12, "Quantity Request": 17,
+            "Inventory": 12, "Stock Status": 16, "Current DoI": 13, "New Inventory": 14,
+            "New DoI": 12, "Area": 14, "Class": 12, "Suggested Transfer": 18,
+            "Implied Avg Daily Sales": 23, "Request Check": 25, "Calculation Note": 52,
+        }
+        for idx, col_name in enumerate(export_df.columns, start=1):
+            ws.column_dimensions[get_column_letter(idx)].width = width_map.get(col_name, 16)
+
+        ws.freeze_panes = f"A{header_row + 1}"
+        ws.auto_filter.ref = f"A{header_row}:{get_column_letter(len(export_df.columns))}{header_row + len(export_df)}"
+        ws.sheet_view.showGridLines = False
+
+    output.seek(0)
+    return output.getvalue()
+
+
+# =========================================================
 # INITIALIZE PRIMARY TABS & DATA ACTIONS
 # =========================================================
-tab_inventory, tab_procurements = st.tabs(["📊 Inventory Control Tower", "📦 Procurements"])
+tab_inventory, tab_branch_requests, tab_procurements = st.tabs([
+    "📊 Inventory Control Tower",
+    "📝 Branch Request Status",
+    "📦 Procurements",
+])
 
 with tab_inventory:
     trend_title_col, trend_action_col = st.columns([8.5, 1.5], vertical_alignment="bottom")
@@ -1917,6 +2159,213 @@ with tab_inventory:
 
     st.markdown("<br>", unsafe_allow_html=True)
     st.caption("SCM Executive Control Tower  • Modal data import. • [Access DRP Module](https://scmdrp.streamlit.app/)")
+
+# =========================================================
+# SECONDARY TAB: BRANCH REQUEST STATUS
+# =========================================================
+with tab_branch_requests:
+    st.markdown("<br>", unsafe_allow_html=True)
+    section_heading(
+        "Branch Request Status",
+        "Check branch/model requests against the active Raw_Data inventory position and simulate post-request DoI",
+    )
+
+    st.markdown(
+        """
+        <div class='import-dialog-note' style='margin-bottom:1rem;'>
+            <b>Purpose:</b> Validate a branch request using the same active <b>Raw_Data</b> source as the Inventory Control Tower.
+            <b>Quantity</b> is retained as the branch request reference quantity. <b>Quantity Request</b> is the proposed incoming
+            replenishment used to calculate <b>New Inventory</b> and <b>New DoI</b>.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if "branch_request_lines" not in st.session_state:
+        st.session_state["branch_request_lines"] = []
+
+    request_source = raw_data.copy()
+    request_source["branch"] = request_source["branch"].fillna("").astype(str).str.strip()
+    request_source["model"] = request_source["model"].fillna("").astype(str).str.strip()
+    request_source = request_source[(request_source["branch"] != "") & (request_source["model"] != "")]
+
+    branch_options = sorted(request_source["branch"].unique().tolist())
+    if not branch_options:
+        st.warning("No Branch + Model records are available in Raw_Data.")
+    else:
+        input_col1, input_col2, input_col3, input_col4 = st.columns([2.2, 2.2, 1.0, 1.15], gap="small")
+
+        with input_col1:
+            request_branch = st.selectbox(
+                "BRANCH",
+                branch_options,
+                key="branch_request_branch_input",
+                help="Branch list is read directly from the active Raw_Data sheet.",
+            )
+
+        model_options = sorted(
+            request_source.loc[request_source["branch"] == request_branch, "model"].dropna().astype(str).str.strip().unique().tolist()
+        )
+        with input_col2:
+            request_model = st.selectbox(
+                "MODEL",
+                model_options,
+                key="branch_request_model_input",
+                help="Only models available for the selected branch in Raw_Data are shown.",
+            )
+
+        with input_col3:
+            request_quantity = st.number_input(
+                "QUANTITY",
+                min_value=0,
+                value=0,
+                step=1,
+                key="branch_request_quantity_input",
+                help="Reference quantity from the branch request document.",
+            )
+
+        with input_col4:
+            request_quantity_requested = st.number_input(
+                "QUANTITY REQUEST",
+                min_value=0,
+                value=0,
+                step=1,
+                key="branch_request_qty_request_input",
+                help="Requested replenishment quantity used in the New DoI simulation.",
+            )
+
+        # Live one-line validation preview.
+        live_line = [{
+            "Branch": request_branch,
+            "Model": request_model,
+            "Quantity": int(request_quantity),
+            "Quantity Request": int(request_quantity_requested),
+        }]
+        live_report = build_branch_request_report(request_source, live_line)
+        live_row = live_report.iloc[0] if not live_report.empty else None
+
+        if live_row is not None:
+            st.markdown("<div style='height:0.25rem'></div>", unsafe_allow_html=True)
+            preview_col1, preview_col2, preview_col3, preview_col4, preview_col5 = st.columns(5, gap="small")
+            preview_col1.markdown(
+                request_metric_card_html("CURRENT INVENTORY", f"{int(live_row['Inventory']):,}" if pd.notna(live_row["Inventory"]) else "N/A", "RAW_DATA ON-HAND", "blue", "I"),
+                unsafe_allow_html=True,
+            )
+            status_text = str(live_row["Stock Status"] or "N/A")
+            status_tone = "red" if stock_status_style_class(status_text) == "stockout" else "yellow" if stock_status_style_class(status_text) in {"critical", "low"} else "green"
+            preview_col2.markdown(
+                request_metric_card_html("STOCK STATUS", status_text, "CURRENT SOURCE STATUS", status_tone, "S"),
+                unsafe_allow_html=True,
+            )
+            preview_col3.markdown(
+                request_metric_card_html("CURRENT DOI", f"{float(live_row['Current DoI']):.2f}" if pd.notna(live_row["Current DoI"]) else "N/A", "DAYS OF INVENTORY", "blue", "D"),
+                unsafe_allow_html=True,
+            )
+            preview_col4.markdown(
+                request_metric_card_html("NEW INVENTORY", f"{int(live_row['New Inventory']):,}" if pd.notna(live_row["New Inventory"]) else "N/A", "AFTER REQUEST QTY", "green", "+"),
+                unsafe_allow_html=True,
+            )
+            preview_col5.markdown(
+                request_metric_card_html("NEW DOI", f"{float(live_row['New DoI']):.2f}" if pd.notna(live_row["New DoI"]) else "N/A", "PROJECTED COVERAGE", "green", "N"),
+                unsafe_allow_html=True,
+            )
+
+        action_col1, action_col2, action_col3, action_col4 = st.columns([1.35, 1.0, 1.0, 4.2], gap="small")
+        with action_col1:
+            if st.button("➕ Add to Report", type="primary", use_container_width=True, key="branch_request_add_line"):
+                st.session_state["branch_request_lines"].append({
+                    "Branch": request_branch,
+                    "Model": request_model,
+                    "Quantity": int(request_quantity),
+                    "Quantity Request": int(request_quantity_requested),
+                })
+                st.rerun()
+        with action_col2:
+            if st.button("↶ Undo Last", use_container_width=True, key="branch_request_undo"):
+                if st.session_state["branch_request_lines"]:
+                    st.session_state["branch_request_lines"].pop()
+                    st.rerun()
+        with action_col3:
+            if st.button("🗑 Clear All", use_container_width=True, key="branch_request_clear"):
+                st.session_state["branch_request_lines"] = []
+                st.rerun()
+        with action_col4:
+            st.caption("New DoI is calculated only from the active Raw_Data coverage basis; unsupported cases are left blank instead of being guessed.")
+
+    request_lines = st.session_state.get("branch_request_lines", [])
+    if request_lines:
+        request_report = build_branch_request_report(request_source, request_lines)
+
+        st.markdown("---")
+        section_heading("Branch Request Validation Report", "Downloadable request-level detail from the current Raw_Data dataset")
+
+        total_lines = len(request_report)
+        total_quantity = int(pd.to_numeric(request_report["Quantity"], errors="coerce").fillna(0).sum())
+        total_requested = int(pd.to_numeric(request_report["Quantity Request"], errors="coerce").fillna(0).sum())
+        risk_mask = request_report["Stock Status"].fillna("").astype(str).map(stock_status_style_class).isin(["stockout", "critical", "low"])
+        risk_lines = int(risk_mask.sum())
+
+        k1, k2, k3, k4 = st.columns(4, gap="small")
+        k1.markdown(request_metric_card_html("REQUEST LINES", f"{total_lines:,}", "ITEMS IN REPORT", "blue", "#"), unsafe_allow_html=True)
+        k2.markdown(request_metric_card_html("TOTAL QUANTITY", f"{total_quantity:,}", "REFERENCE QUANTITY", "blue", "Q"), unsafe_allow_html=True)
+        k3.markdown(request_metric_card_html("TOTAL QTY REQUEST", f"{total_requested:,}", "PROPOSED INCOMING", "green", "+"), unsafe_allow_html=True)
+        k4.markdown(request_metric_card_html("RISK LINES", f"{risk_lines:,}", "STOCKOUT / CRITICAL / LOW", "red" if risk_lines else "green", "!"), unsafe_allow_html=True)
+
+        display_columns = [
+            "Branch", "Model", "Quantity", "Quantity Request", "Inventory", "Stock Status",
+            "Current DoI", "New Inventory", "New DoI", "Request Check"
+        ]
+        display_report = request_report[display_columns].copy()
+        st.dataframe(
+            display_report,
+            hide_index=True,
+            width="stretch",
+            column_config={
+                "Current DoI": st.column_config.NumberColumn("Current DoI", format="%.2f"),
+                "New DoI": st.column_config.NumberColumn("New DoI", format="%.2f"),
+                "Quantity": st.column_config.NumberColumn("Quantity", format="%d"),
+                "Quantity Request": st.column_config.NumberColumn("Quantity Request", format="%d"),
+                "Inventory": st.column_config.NumberColumn("Inventory", format="%d"),
+                "New Inventory": st.column_config.NumberColumn("New Inventory", format="%d"),
+            },
+        )
+
+        download_col1, download_col2, detail_col = st.columns([1.25, 1.15, 3.6], gap="small")
+        with download_col1:
+            try:
+                branch_request_xlsx = build_branch_request_excel(request_report)
+                st.download_button(
+                    "⬇ Download Excel Report",
+                    data=branch_request_xlsx,
+                    file_name=f"Branch_Request_Status_{date.today().strftime('%Y%m%d')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                    key="branch_request_download_xlsx",
+                )
+            except Exception as exc:
+                st.error(f"Excel export unavailable: {exc}")
+        with download_col2:
+            branch_request_csv = request_report.to_csv(index=False).encode("utf-8-sig")
+            st.download_button(
+                "⬇ Download CSV",
+                data=branch_request_csv,
+                file_name=f"Branch_Request_Status_{date.today().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+                use_container_width=True,
+                key="branch_request_download_csv",
+            )
+        with detail_col:
+            st.caption(
+                "Projection basis: Implied Average Daily Sales = Current Inventory ÷ Current DoI; "
+                "New DoI = (Current Inventory + Quantity Request) ÷ Implied Average Daily Sales. "
+                "When Current Inventory or Current DoI is zero, the source does not support a reliable projection, so New DoI is blank."
+            )
+
+        with st.expander("View Full Validation Detail"):
+            st.dataframe(request_report, hide_index=True, width="stretch")
+    else:
+        st.info("Add one or more Branch + Model request lines to build the downloadable validation report.")
+
 
 # =========================================================
 # SECONDARY TAB: PROCUREMENTS
