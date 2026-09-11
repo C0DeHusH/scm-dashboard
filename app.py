@@ -726,7 +726,7 @@ def admin_login_dialog():
     st.markdown(
         """
         <div class="import-dialog-note" style="margin-bottom: 1rem;">
-            Please enter the administrator password to unlock Data Synchronization and Presentation Export capabilities.
+            Please enter the administrator password to unlock Data Synchronization, Import Template Export, and Presentation Export capabilities.
         </div>
         """,
         unsafe_allow_html=True
@@ -765,6 +765,195 @@ def persist_uploaded_workbook(uploaded_bytes):
     return f"SCM workbook validated and saved to {destination_text}."
 
 
+@st.cache_data(show_spinner=False)
+def build_import_template_excel(template_year):
+    """Create a clean Excel import template that exactly matches the dashboard parser."""
+    try:
+        import calendar
+        from datetime import timedelta
+        from openpyxl import Workbook
+        from openpyxl.comments import Comment
+        from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+        from openpyxl.worksheet.datavalidation import DataValidation
+    except Exception as exc:
+        raise RuntimeError("Import template export requires openpyxl.") from exc
+
+    template_year = int(template_year)
+    output = io.BytesIO()
+    workbook = Workbook()
+
+    # -------------------------
+    # Raw_Data
+    # -------------------------
+    raw_ws = workbook.active
+    raw_ws.title = "Raw_Data"
+    raw_headers = [
+        "Area",
+        "Branch",
+        "Class",
+        "Stock Status",
+        "Remaining Inventory",
+        "Suggested Transfer",
+        "DoI",
+        "Model",
+        "Average Daily Sales (Qty)",
+    ]
+    raw_ws.append(raw_headers)
+
+    header_fill = PatternFill("solid", fgColor="0F172A")
+    header_font = Font(name="Aptos", size=10, bold=True, color="FFFFFF")
+    accent_fill = PatternFill("solid", fgColor="EEF2FF")
+    guide_fill = PatternFill("solid", fgColor="F8FAFC")
+    thin_border = Border(
+        bottom=Side(style="thin", color="CBD5E1")
+    )
+
+    for cell in raw_ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = thin_border
+    raw_ws.row_dimensions[1].height = 30
+    raw_ws.freeze_panes = "A2"
+    raw_ws.auto_filter.ref = "A1:I5000"
+
+    raw_widths = {
+        "A": 16, "B": 24, "C": 14, "D": 18, "E": 20,
+        "F": 20, "G": 12, "H": 30, "I": 25,
+    }
+    for col_letter, width in raw_widths.items():
+        raw_ws.column_dimensions[col_letter].width = width
+
+    header_notes = {
+        "A1": "Area or network assignment for the branch.",
+        "B1": "Branch name/code. Branch + Model is used by Branch Request validation.",
+        "C1": "Use Class A, Class B, or Class C.",
+        "D1": "Use Stockout for out-of-stock records so the stockout-rate calculation counts them correctly.",
+        "E1": "Current on-hand inventory quantity. Whole units are recommended.",
+        "F1": "Suggested transfer quantity. Whole units are recommended.",
+        "G1": "Current Days of Inventory (DoI).",
+        "H1": "Motorcycle model or monitored SKU/model name.",
+        "I1": "Average Daily Sales quantity used to calculate Branch Request New DoI.",
+    }
+    for cell_ref, note in header_notes.items():
+        raw_ws[cell_ref].comment = Comment(note, "SCM Control Tower")
+
+    class_validation = DataValidation(
+        type="list",
+        formula1='"Class A,Class B,Class C"',
+        allow_blank=True,
+    )
+    class_validation.error = "Select Class A, Class B, or Class C."
+    class_validation.errorTitle = "Invalid Class"
+    class_validation.prompt = "Choose the branch/model Pareto class."
+    class_validation.promptTitle = "Pareto Class"
+    raw_ws.add_data_validation(class_validation)
+    class_validation.add("C2:C5000")
+
+    status_validation = DataValidation(
+        type="list",
+        formula1='"Stockout,Critical,Low,OK,Overstock"',
+        allow_blank=True,
+    )
+    status_validation.error = "Use Stockout, Critical, Low, OK, or Overstock."
+    status_validation.errorTitle = "Invalid Stock Status"
+    status_validation.prompt = "Use Stockout exactly for records that should count as out of stock."
+    status_validation.promptTitle = "Stock Status"
+    raw_ws.add_data_validation(status_validation)
+    status_validation.add("D2:D5000")
+
+    for row in range(2, 5001):
+        raw_ws[f"E{row}"].number_format = "0"
+        raw_ws[f"F{row}"].number_format = "0"
+        raw_ws[f"G{row}"].number_format = "0.00"
+        raw_ws[f"I{row}"].number_format = "0.0000"
+
+    # -------------------------
+    # KPI sheets
+    # -------------------------
+    kpi_names = [
+        "MUTI MC : Stock Outrate - Overall after PO Balance",
+        "MUTI MC : Stock Outrate - Per Branch",
+        "Overall Class A Stock Out Rate",
+        "MUTI MC : Stock Outrate - Overall (Before PO Balance)",
+        "MUTI MC : DoI",
+        "MC Class A Doi",
+    ]
+    percentage_rows = {2, 3, 4, 5}
+
+    def format_kpi_sheet(ws, dates, subtitle):
+        ws["A1"] = "KPI Metric"
+        for idx, period_date in enumerate(dates, start=2):
+            cell = ws.cell(row=1, column=idx, value=period_date)
+            cell.number_format = "dd-mmm-yyyy"
+        for idx, kpi_name in enumerate(kpi_names, start=2):
+            ws.cell(row=idx, column=1, value=kpi_name)
+
+        max_col = max(len(dates) + 1, 2)
+        for row in ws.iter_rows(min_row=1, max_row=1, min_col=1, max_col=max_col):
+            for cell in row:
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                cell.border = thin_border
+        for row_idx in range(2, 8):
+            ws.cell(row=row_idx, column=1).fill = accent_fill
+            ws.cell(row=row_idx, column=1).font = Font(name="Aptos", size=10, bold=True, color="1E293B")
+            ws.cell(row=row_idx, column=1).alignment = Alignment(vertical="center", wrap_text=True)
+            ws.cell(row=row_idx, column=1).border = thin_border
+            for col_idx in range(2, max_col + 1):
+                ws.cell(row=row_idx, column=col_idx).fill = guide_fill
+                ws.cell(row=row_idx, column=col_idx).border = thin_border
+                ws.cell(row=row_idx, column=col_idx).alignment = Alignment(horizontal="center")
+                if row_idx in percentage_rows:
+                    # Enter either Excel percentage values (e.g. 5%) or decimal equivalents (0.05).
+                    ws.cell(row=row_idx, column=col_idx).number_format = "0.00%"
+                else:
+                    ws.cell(row=row_idx, column=col_idx).number_format = "0.00"
+
+        ws["A1"].comment = Comment(
+            subtitle + " Keep KPI labels in column A unchanged; the dashboard matches them literally.",
+            "SCM Control Tower",
+        )
+        ws.freeze_panes = "B2"
+        ws.column_dimensions["A"].width = 58
+        for col_idx in range(2, max_col + 1):
+            ws.column_dimensions[ws.cell(row=1, column=col_idx).column_letter].width = 14
+        for row_idx in range(1, 8):
+            ws.row_dimensions[row_idx].height = 28 if row_idx == 1 else 34
+
+    ytd_ws = workbook.create_sheet("KPI_YTD_Input")
+    ytd_dates = [
+        date(template_year, month, calendar.monthrange(template_year, month)[1])
+        for month in range(1, 13)
+    ]
+    format_kpi_sheet(
+        ytd_ws,
+        ytd_dates,
+        "Year-to-date template. One date column per month is pre-created for convenience.",
+    )
+
+    weekly_ws = workbook.create_sheet("KPI_Weekly_Input")
+    first_day = date(template_year, 1, 1)
+    # First Sunday on/after January 1, followed by every 7 days through year-end.
+    days_to_sunday = (6 - first_day.weekday()) % 7
+    first_sunday = first_day + timedelta(days=days_to_sunday)
+    weekly_dates = []
+    current_week = first_sunday
+    while current_week.year == template_year:
+        weekly_dates.append(current_week)
+        current_week += timedelta(days=7)
+    format_kpi_sheet(
+        weekly_ws,
+        weekly_dates,
+        "Weekly template. Weekly date columns are pre-created for the selected year.",
+    )
+
+    workbook.save(output)
+    output.seek(0)
+    return output.getvalue()
+
+
 @st.dialog("Data Sync", width="large")
 def data_sync_dialog():
     st.markdown(
@@ -776,6 +965,19 @@ def data_sync_dialog():
         </div>
         """, unsafe_allow_html=True
     )
+
+    template_bytes = build_import_template_excel(date.today().year)
+    st.download_button(
+        "⬇ Export Import Template",
+        data=template_bytes,
+        file_name=f"SCM_Import_Template_{date.today().year}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+        key="scm_dialog_export_import_template",
+        help="Download a clean workbook with the required Raw_Data, KPI_YTD_Input, and KPI_Weekly_Input structure.",
+    )
+    st.caption("Use the exported template when preparing a new import workbook. Do not rename the three required sheets or KPI labels.")
+
     dialog_file = st.file_uploader("Select SCM Excel workbook", type=["xlsx", "xls"], help="Use a genuine Microsoft Excel workbook.", key="scm_dialog_uploader")
     if dialog_file is None:
         st.caption("Choose a file, then click Validate & Sync.")
@@ -2609,7 +2811,7 @@ with tab_inventory:
         # ADMIN AUTHENTICATION GATING FOR DATA CONTROL
         # ---------------------------------------------------------
         if not st.session_state.get("is_admin_logged_in", False):
-            if st.button("🔒 Admin Login", use_container_width=True, help="Login to access Data Synchronization and Presentation Export"):
+            if st.button("🔒 Admin Login", use_container_width=True, help="Login to access Data Synchronization, Import Template Export, and Presentation Export"):
                 admin_login_dialog()
         else:
             with st.popover("Data Control ▾", use_container_width=True):
@@ -2618,8 +2820,19 @@ with tab_inventory:
                     st.rerun()
 
                 st.markdown(
-                    "<div style='font-weight:850; font-size:0.78rem; color:var(--scm-muted); margin-bottom:0.45rem; margin-top:0.5rem;'>WORKBOOK & PRESENTATION</div>",
+                    "<div style='font-weight:850; font-size:0.78rem; color:var(--scm-muted); margin-bottom:0.45rem; margin-top:0.5rem;'>WORKBOOK, TEMPLATE & PRESENTATION</div>",
                     unsafe_allow_html=True,
+                )
+
+                import_template_bytes = build_import_template_excel(date.today().year)
+                st.download_button(
+                    "⬇ Export Import Template",
+                    data=import_template_bytes,
+                    file_name=f"SCM_Import_Template_{date.today().year}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                    key="scm_data_control_export_import_template",
+                    help="Download the blank Excel structure required for Data Sync.",
                 )
 
                 if st.button("📥 Data Sync", type="primary", use_container_width=True, key="open_scm_data_sync_dialog"):
