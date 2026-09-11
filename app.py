@@ -556,19 +556,63 @@ def process_excel_file(file_path_or_buffer):
     if "class" in raw_df.columns:
         raw_df.rename(columns={"class": "pareto_class"}, inplace=True)
 
-    required_raw_cols = ["area", "branch", "pareto_class", "stock_status", "remaining_inventory", "suggested_transfer", "doi", "model", "average_daily_sales_(qty)"]
+    # Average Daily Sales is required only by Branch Request New DoI.
+    # It must NOT prevent the whole dashboard from loading when an older
+    # persisted workbook is restored on refresh.
+    ads_target_col = "average_daily_sales_(qty)"
+    ads_source_available = ads_target_col in raw_df.columns
+
+    # Accept reasonable header variations from manually maintained workbooks.
+    if not ads_source_available:
+        compact_header_map = {
+            "".join(ch for ch in str(col).casefold() if ch.isalnum()): col
+            for col in raw_df.columns
+        }
+        ads_alias_keys = {
+            "averagedailysalesqty",
+            "averagedailysalesquantity",
+            "avgdailysalesqty",
+            "avgdailysalesquantity",
+            "adsqty",
+            "averagedailysales",
+        }
+        alias_match = next(
+            (compact_header_map[key] for key in ads_alias_keys if key in compact_header_map),
+            None,
+        )
+        if alias_match is not None:
+            raw_df.rename(columns={alias_match: ads_target_col}, inplace=True)
+            ads_source_available = True
+
+    # Core columns remain mandatory for the Executive Control Tower.
+    # Average Daily Sales is intentionally excluded from this list.
+    required_raw_cols = [
+        "area", "branch", "pareto_class", "stock_status",
+        "remaining_inventory", "suggested_transfer", "doi", "model",
+    ]
     missing_raw_cols = [col for col in required_raw_cols if col not in raw_df.columns]
     if missing_raw_cols:
         raise ValueError("Raw_Data is missing required column(s): " + ", ".join(missing_raw_cols))
 
+    # If the active persisted workbook is an older version, create the optional
+    # ADS field as blank so the dashboard can load. Branch Request New DoI will
+    # display N/A until a workbook with Average Daily Sales (Qty) is synced.
+    if not ads_source_available:
+        raw_df[ads_target_col] = np.nan
+
     # Keep inventory / transfer as whole units, but preserve Raw_Data DoI and
     # Average Daily Sales (Qty) precision for accurate request projection.
     for col in ["remaining_inventory", "suggested_transfer"]:
-        raw_df[col] = round_series_half_up(pd.to_numeric(raw_df[col], errors="coerce").fillna(0)).fillna(0).astype(int)
+        raw_df[col] = round_series_half_up(
+            pd.to_numeric(raw_df[col], errors="coerce").fillna(0)
+        ).fillna(0).astype(int)
+
     raw_df["doi"] = pd.to_numeric(raw_df["doi"], errors="coerce").fillna(0.0).astype(float)
-    raw_df["average_daily_sales_(qty)"] = pd.to_numeric(
-        raw_df["average_daily_sales_(qty)"], errors="coerce"
-    ).fillna(0.0).astype(float)
+
+    # Preserve NaN when ADS is unavailable so it is distinguishable from a
+    # genuine zero-demand value.
+    raw_df[ads_target_col] = pd.to_numeric(raw_df[ads_target_col], errors="coerce").astype(float)
+    raw_df["_ads_source_available"] = bool(ads_source_available)
 
     raw_df["pareto_class"] = raw_df["pareto_class"].astype(str).str.strip()
     raw_df["stock_status"] = raw_df["stock_status"].fillna("").astype(str).str.strip()
@@ -2381,6 +2425,19 @@ with tab_branch_requests:
         "Branch Request Status",
         "Branch + Model request validation • model dropdown • live Raw_Data projection",
     )
+
+    ads_source_available = bool(
+        raw_data.get("_ads_source_available", pd.Series(dtype=bool))
+        .fillna(False)
+        .astype(bool)
+        .any()
+    )
+    if not ads_source_available:
+        st.warning(
+            "The active persisted Raw_Data is an older version and does not contain "
+            "'Average Daily Sales (Qty)'. The dashboard will continue to work, but "
+            "Branch Request New DoI will display N/A. Use Data Sync to load the latest workbook."
+        )
 
     request_source = raw_data.copy()
     request_source["branch"] = request_source["branch"].fillna("").astype(str).str.strip()
