@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 import os
@@ -880,104 +879,43 @@ def _evenly_spaced_indexes(length, max_items):
     return sorted(set(indexes))
 
 
-def _trend_direction_for_series(periods, values, is_percentage):
-    """Return the same trend-direction classification without plotting a synthetic y-series."""
+def _trend_fit_for_series(periods, values, is_percentage):
+    """Return a true linear fitted trend series plus direction classification.
+
+    The fitted values are used only as a visual guide. Actual KPI values and their
+    rounding remain untouched.
+    """
     if len(values) < 2:
-        return "Stable", "→"
+        return None, "Stable", "→"
 
     trend_x = ((periods - periods.min()).dt.total_seconds().to_numpy(dtype=float) / 86400.0)
     trend_y = pd.to_numeric(values, errors="coerce").to_numpy(dtype=float)
     valid = np.isfinite(trend_x) & np.isfinite(trend_y)
     if valid.sum() < 2 or np.ptp(trend_x[valid]) <= 0:
-        return "Stable", "→"
+        return None, "Stable", "→"
 
     slope, intercept = np.polyfit(trend_x[valid], trend_y[valid], 1)
     fitted_y = slope * trend_x + intercept
+
     actual_valid = trend_y[np.isfinite(trend_y)]
     actual_span = max(float(np.nanmax(actual_valid)) - float(np.nanmin(actual_valid)), 0.0)
-    fitted_delta = float(fitted_y[-1] - fitted_y[0])
+    fitted_delta = float(fitted_y[valid][-1] - fitted_y[valid][0])
     flat_threshold = max(actual_span * 0.03, 0.001 if is_percentage else 0.10)
 
     if fitted_delta > flat_threshold:
-        return "Upward", "↑"
-    if fitted_delta < -flat_threshold:
-        return "Downward", "↓"
-    return "Stable", "→"
-
-
-def apply_executive_bar_style(fig, *, accent_color, value_axis_title, value_max, category_order, orientation="v", percent=True, height=425, right_margin=28):
-    """Presentation-grade shared bar styling. Values/order are not altered here."""
-    _ = fig.update_traces(
-        marker=dict(
-            color=accent_color,
-            line=dict(color=_hex_to_rgba(accent_color, 0.32), width=0.8),
-        ),
-        opacity=0.96,
-        textfont=dict(size=12, color=PLOTLY_CHART_TEXT, family=PLOTLY_FONT_FAMILY),
-        cliponaxis=False,
-    )
-
-    value_axis = dict(
-        title=dict(text=value_axis_title, font=dict(size=11, color=PLOTLY_CHART_MUTED, family=PLOTLY_FONT_FAMILY)),
-        range=[0, value_max],
-        gridcolor=PLOTLY_CHART_GRID,
-        gridwidth=1,
-        zeroline=False,
-        showline=False,
-        ticks="",
-        tickfont=dict(size=10, color=PLOTLY_CHART_MUTED, family=PLOTLY_FONT_FAMILY),
-        automargin=True,
-    )
-    if percent:
-        value_axis["ticksuffix"] = "%"
-
-    category_axis = dict(
-        title="",
-        type="category",
-        categoryorder="array",
-        categoryarray=category_order,
-        showgrid=False,
-        showline=False,
-        ticks="",
-        tickfont=dict(size=10, color=PLOTLY_CHART_MUTED, family=PLOTLY_FONT_FAMILY),
-        automargin=True,
-    )
-
-    if orientation == "h":
-        category_axis["autorange"] = "reversed"
-        xaxis, yaxis = value_axis, category_axis
+        direction, symbol = "Upward", "↑"
+    elif fitted_delta < -flat_threshold:
+        direction, symbol = "Downward", "↓"
     else:
-        category_axis["tickangle"] = 0
-        xaxis, yaxis = category_axis, value_axis
+        direction, symbol = "Stable", "→"
 
-    _ = fig.update_layout(
-        template=PLOTLY_TEMPLATE,
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        height=height,
-        margin=dict(t=82, b=48, l=38 if orientation == "v" else 18, r=right_margin),
-        showlegend=False,
-        bargap=0.34 if orientation == "v" else 0.28,
-        hovermode="closest",
-        dragmode=False,
-        font=dict(color=PLOTLY_CHART_TEXT, family=PLOTLY_FONT_FAMILY),
-        title=dict(
-            x=0.02,
-            xanchor="left",
-            y=0.97,
-            yanchor="top",
-            font=dict(size=16, color=PLOTLY_CHART_TEXT, family=PLOTLY_FONT_FAMILY),
-        ),
-        hoverlabel=dict(
-            bgcolor=PLOTLY_HOVER_BG,
-            bordercolor=_hex_to_rgba(accent_color, 0.70),
-            font=dict(color=PLOTLY_HOVER_TEXT, size=11, family=PLOTLY_FONT_FAMILY),
-        ),
-        uniformtext=dict(minsize=9, mode="hide"),
-        xaxis=xaxis,
-        yaxis=yaxis,
-    )
-    return fig
+    return fitted_y, direction, symbol
+
+
+def _trend_direction_for_series(periods, values, is_percentage):
+    """Backward-compatible direction helper used by any existing call sites."""
+    _, direction, symbol = _trend_fit_for_series(periods, values, is_percentage)
+    return direction, symbol
 
 
 def prepare_chart_series(df, y_col):
@@ -995,6 +933,162 @@ def infer_percentage_scale(series):
     if numeric.empty:
         return 1.0
     return 0.01 if numeric.abs().max() > 1.5 else 1.0
+
+
+def _ranked_bar_palette(length, mode="risk"):
+    """Executive rank palette; changes visual emphasis only, never values/order."""
+    if length <= 0:
+        return []
+    if mode == "positive":
+        palette = ["#10b981", "#22c55e", "#34d399"]
+        return [palette[min(i, len(palette) - 1)] if i < 3 else "#059669" for i in range(length)]
+
+    palette = ["#f43f5e", "#fb7185", "#f59e0b"]
+    return [palette[i] if i < len(palette) else "#6366f1" for i in range(length)]
+
+
+def _create_power_ranked_bar(
+    df,
+    *,
+    category_col,
+    value_col,
+    title,
+    subtitle,
+    value_axis_title,
+    hovertemplate,
+    custom_data_cols=None,
+    percent=True,
+    positive=False,
+    text_values=None,
+    reference_value=None,
+    reference_label="Reference",
+    height=None,
+):
+    """Create an executive 'track + value' horizontal ranking bar.
+
+    The background track improves scan speed; rank prefix, risk emphasis, direct
+    labels and a reference marker make the graph decision-oriented while the
+    original values remain unchanged.
+    """
+    if df is None or df.empty:
+        return None
+
+    plot_df = df.copy().reset_index(drop=True)
+    values = pd.to_numeric(plot_df[value_col], errors="coerce").fillna(0.0)
+    categories = plot_df[category_col].fillna("").astype(str).tolist()
+    ranked_labels = [f"{idx + 1:02d}  {label}" for idx, label in enumerate(categories)]
+
+    observed_max = float(values.max()) if len(values) else 0.0
+    if percent:
+        axis_max = min(105.0, max(10.0, observed_max * 1.22))
+        if observed_max >= 90:
+            axis_max = 105.0
+        text = text_values if text_values is not None else [f"{v:.0f}%" for v in values]
+    else:
+        axis_max = max(1.0, observed_max * 1.22)
+        text = text_values if text_values is not None else [f"{v:,.0f}" for v in values]
+
+    custom_cols = custom_data_cols or []
+    customdata = plot_df[custom_cols].to_numpy() if custom_cols else None
+    bar_colors = _ranked_bar_palette(len(plot_df), mode="positive" if positive else "risk")
+    track_color = "rgba(148,163,184,0.10)" if SCM_IS_DARK else "rgba(15,23,42,0.055)"
+
+    fig = go.Figure()
+    # Background track establishes a consistent visual scale for every row.
+    _ = fig.add_trace(go.Bar(
+        x=[axis_max] * len(plot_df),
+        y=ranked_labels,
+        orientation="h",
+        marker=dict(color=track_color, line=dict(width=0)),
+        width=0.66,
+        hoverinfo="skip",
+        showlegend=False,
+        name="Scale",
+    ))
+    # Actual measured value.
+    _ = fig.add_trace(go.Bar(
+        x=values,
+        y=ranked_labels,
+        orientation="h",
+        marker=dict(
+            color=bar_colors,
+            line=dict(color="rgba(255,255,255,0.16)" if SCM_IS_DARK else "rgba(15,23,42,0.10)", width=0.8),
+        ),
+        width=0.50,
+        text=text,
+        textposition="outside",
+        textfont=dict(size=11, color=PLOTLY_CHART_TEXT, family=PLOTLY_FONT_FAMILY),
+        customdata=customdata,
+        hovertemplate=hovertemplate,
+        cliponaxis=False,
+        showlegend=False,
+        name="Actual",
+    ))
+
+    if reference_value is not None and np.isfinite(float(reference_value)):
+        reference_value = float(reference_value)
+        _ = fig.add_vline(
+            x=reference_value,
+            line_width=1.5,
+            line_dash="dot",
+            line_color="rgba(148,163,184,0.82)",
+            annotation_text=(f"{reference_label} {reference_value:.0f}%" if percent else f"{reference_label} {reference_value:,.0f}"),
+            annotation_position="top",
+            annotation_font=dict(size=9, color=PLOTLY_CHART_MUTED, family=PLOTLY_FONT_FAMILY),
+        )
+
+    chart_height = height or max(420, 48 * len(plot_df) + 150)
+    xaxis = dict(
+        title=dict(text=value_axis_title, font=dict(size=10, color=PLOTLY_CHART_MUTED, family=PLOTLY_FONT_FAMILY)),
+        range=[0, axis_max],
+        gridcolor=PLOTLY_CHART_GRID,
+        gridwidth=1,
+        zeroline=False,
+        showline=False,
+        ticks="",
+        tickfont=dict(size=9, color=PLOTLY_CHART_MUTED, family=PLOTLY_FONT_FAMILY),
+        automargin=True,
+    )
+    if percent:
+        xaxis["ticksuffix"] = "%"
+
+    _ = fig.update_layout(
+        template=PLOTLY_TEMPLATE,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        barmode="overlay",
+        height=chart_height,
+        margin=dict(t=88, b=46, l=18, r=74),
+        showlegend=False,
+        hovermode="closest",
+        dragmode=False,
+        font=dict(color=PLOTLY_CHART_TEXT, family=PLOTLY_FONT_FAMILY),
+        title=dict(
+            text=f"{title}<br><span style='font-size:10px;color:#94a3b8'>{subtitle}</span>",
+            x=0.02, y=0.97, xanchor="left", yanchor="top",
+            font=dict(size=16, color=PLOTLY_CHART_TEXT, family=PLOTLY_FONT_FAMILY),
+        ),
+        hoverlabel=dict(
+            bgcolor=PLOTLY_HOVER_BG,
+            bordercolor=PLOTLY_HOVER_BORDER,
+            font=dict(color=PLOTLY_HOVER_TEXT, size=11, family=PLOTLY_FONT_FAMILY),
+        ),
+        xaxis=xaxis,
+        yaxis=dict(
+            title="",
+            type="category",
+            categoryorder="array",
+            categoryarray=ranked_labels,
+            autorange="reversed",
+            showgrid=False,
+            showline=False,
+            ticks="",
+            tickfont=dict(size=10, color=PLOTLY_CHART_TEXT, family=PLOTLY_FONT_FAMILY),
+            automargin=True,
+        ),
+        uniformtext=dict(minsize=9, mode="hide"),
+    )
+    return fig
 
 
 def build_area_stockout_summary(source_df):
@@ -1039,46 +1133,43 @@ def create_area_stockout_figures(area_rates_df):
     if area_rates_df.empty:
         return None, None
 
-    area_order = area_rates_df["Area"].tolist()
-    fig_avg = px.bar(
-        area_rates_df, x="Area", y="Average Stock Out Rate", text="Average Stock Out Rate",
-        template=PLOTLY_TEMPLATE, title="Average Stock Out Rate per Area",
-    )
-    _ = fig_avg.update_traces(
-        texttemplate="<b>%{text:.0f}%</b>", textposition="outside",
-        hovertemplate="<b>%{x}</b><br>Average Stock Out Rate: <b>%{y:.0f}%</b><extra></extra>",
-    )
-    avg_bar_max = float(area_rates_df["Average Stock Out Rate"].max())
-    _ = apply_executive_bar_style(
-        fig_avg, accent_color="#6366f1", value_axis_title="Stockout rate",
-        value_max=max(10, avg_bar_max * 1.24), category_order=area_order,
-        orientation="v", percent=True, height=425,
-    )
-    _ = fig_avg.update_layout(
-        title_text="Average Stock Out Rate per Area<br><span style='font-size:10px;color:#94a3b8'>NETWORK RISK COMPARISON • HIGHER BARS REQUIRE MORE ATTENTION</span>"
+    # Data order and values are inherited from build_area_stockout_summary unchanged.
+    avg_reference = float(pd.to_numeric(area_rates_df["Average Stock Out Rate"], errors="coerce").mean())
+    class_a_reference = float(pd.to_numeric(area_rates_df["Class A Stock Out Rate"], errors="coerce").mean())
+
+    fig_avg = _create_power_ranked_bar(
+        area_rates_df,
+        category_col="Area",
+        value_col="Average Stock Out Rate",
+        title="Average Stock Out Rate per Area",
+        subtitle="EXECUTIVE RISK RANKING • HIGHEST-RISK AREA FIRST • DOTTED LINE = AREA MEAN",
+        value_axis_title="Stockout rate",
+        hovertemplate="<b>%{y}</b><br>Average Stock Out Rate: <b>%{x:.0f}%</b><extra></extra>",
+        percent=True,
+        positive=False,
+        reference_value=avg_reference,
+        reference_label="Area mean",
+        height=max(425, 50 * len(area_rates_df) + 150),
     )
 
-    fig_class_a = px.bar(
-        area_rates_df, x="Area", y="Class A Stock Out Rate", text="Class A Stock Out Rate",
-        template=PLOTLY_TEMPLATE, title="Class A Stock Out Rate per Area",
-        custom_data=["Class A Stock Out Count", "Class A Total Stock Status Count"],
-    )
-    _ = fig_class_a.update_traces(
-        texttemplate="<b>%{text:.0f}%</b>", textposition="outside",
+    fig_class_a = _create_power_ranked_bar(
+        area_rates_df,
+        category_col="Area",
+        value_col="Class A Stock Out Rate",
+        title="Class A Stock Out Rate per Area",
+        subtitle="PARETO PRIORITY RISK • DIRECT RATE + STOCKOUT COUNTS • DOTTED LINE = AREA MEAN",
+        value_axis_title="Class A stockout rate",
+        custom_data_cols=["Class A Stock Out Count", "Class A Total Stock Status Count"],
         hovertemplate=(
-            "<b>%{x}</b><br>Class A Stock Out Rate: <b>%{y:.0f}%</b>"
+            "<b>%{y}</b><br>Class A Stock Out Rate: <b>%{x:.0f}%</b>"
             "<br>Class A Stock Out Count: <b>%{customdata[0]}</b>"
             "<br>Class A Total Stock Status Count: <b>%{customdata[1]}</b><extra></extra>"
         ),
-    )
-    class_a_bar_max = float(area_rates_df["Class A Stock Out Rate"].max())
-    _ = apply_executive_bar_style(
-        fig_class_a, accent_color="#f43f5e", value_axis_title="Class A stockout rate",
-        value_max=max(10, class_a_bar_max * 1.24), category_order=area_order,
-        orientation="v", percent=True, height=425,
-    )
-    _ = fig_class_a.update_layout(
-        title_text="Class A Stock Out Rate per Area<br><span style='font-size:10px;color:#94a3b8'>HIGHEST-PRIORITY PARETO RISK • STOCKOUT COUNT / CLASS A STATUS COUNT</span>"
+        percent=True,
+        positive=False,
+        reference_value=class_a_reference,
+        reference_label="Area mean",
+        height=max(425, 50 * len(area_rates_df) + 150),
     )
     return fig_avg, fig_class_a
 
@@ -1130,66 +1221,63 @@ def create_class_a_ranking_figures(high_df, zero_df):
     fig_zero = None
 
     if not high_df.empty:
-        high_order = high_df["Branch Display"].tolist()
-        high_rate_max = float(high_df["Class A Stock Out Rate"].max())
-        fig_high = px.bar(
-            high_df, x="Class A Stock Out Rate", y="Branch Display", orientation="h",
-            text="Class A Stock Out Rate", template=PLOTLY_TEMPLATE,
+        risk_reference = float(pd.to_numeric(high_df["Class A Stock Out Rate"], errors="coerce").mean())
+        fig_high = _create_power_ranked_bar(
+            high_df,
+            category_col="Branch Display",
+            value_col="Class A Stock Out Rate",
             title=f"Top {len(high_df)} Highest Class A Stock Out Rate",
-            custom_data=["area", "branch", "Class A Stock Out Count", "Class A Total Stock Status Count"],
-        )
-        _ = fig_high.update_traces(
-            texttemplate="<b>%{text:.0f}%</b>", textposition="outside",
+            subtitle="PRIORITY BRANCH RISK • TOP 3 EMPHASIZED • DOTTED LINE = DISPLAYED-BRANCH MEAN",
+            value_axis_title="Class A stockout rate",
+            custom_data_cols=["area", "branch", "Class A Stock Out Count", "Class A Total Stock Status Count"],
             hovertemplate=(
                 "<b>%{customdata[1]}</b><br>Area: <b>%{customdata[0]}</b>"
                 "<br>Class A Stock Out Rate: <b>%{x:.0f}%</b>"
                 "<br>Class A Stock Out Count: <b>%{customdata[2]}</b>"
                 "<br>Class A Total Stock Status Count: <b>%{customdata[3]}</b><extra></extra>"
             ),
-        )
-        _ = apply_executive_bar_style(
-            fig_high, accent_color="#f43f5e", value_axis_title="Class A stockout rate",
-            value_max=min(105, max(10, high_rate_max * 1.18)), category_order=high_order,
-            orientation="h", percent=True, height=max(410, 44 * len(high_df) + 130), right_margin=54,
-        )
-        _ = fig_high.update_layout(
-            title_text=f"Top {len(high_df)} Highest Class A Stock Out Rate<br><span style='font-size:10px;color:#94a3b8'>PRIORITY BRANCH RISK • HIGHEST RATE FIRST</span>"
+            percent=True,
+            positive=False,
+            reference_value=risk_reference,
+            reference_label="Top-branch mean",
+            height=max(430, 48 * len(high_df) + 155),
         )
 
     if not zero_df.empty:
         zero_plot = zero_df.copy()
         zero_plot["Zero Rate Label"] = "0% OOS"
-        zero_order = zero_plot["Branch Display"].tolist()
-        zero_coverage_max = float(zero_plot["Class A Total Stock Status Count"].max())
-        fig_zero = px.bar(
-            zero_plot, x="Class A Total Stock Status Count", y="Branch Display", orientation="h",
-            text="Zero Rate Label", template=PLOTLY_TEMPLATE,
+        coverage_reference = float(pd.to_numeric(zero_plot["Class A Total Stock Status Count"], errors="coerce").median())
+        fig_zero = _create_power_ranked_bar(
+            zero_plot,
+            category_col="Branch Display",
+            value_col="Class A Total Stock Status Count",
             title=f"Top {len(zero_plot)} Branches with 0% Class A Stock Out Rate",
-            custom_data=["area", "branch", "Class A Stock Out Rate", "Class A Stock Out Count", "Class A Total Stock Status Count"],
-        )
-        _ = fig_zero.update_traces(
-            texttemplate="<b>%{text}</b>", textposition="outside",
+            subtitle="ZERO-OOS LEADERS • RANKED BY CLASS A COVERAGE • DOTTED LINE = MEDIAN COVERAGE",
+            value_axis_title="Class A stock-status coverage count",
+            custom_data_cols=["area", "branch", "Class A Stock Out Rate", "Class A Stock Out Count", "Class A Total Stock Status Count"],
             hovertemplate=(
                 "<b>%{customdata[1]}</b><br>Area: <b>%{customdata[0]}</b>"
                 "<br>Class A Stock Out Rate: <b>%{customdata[2]:.0f}%</b>"
                 "<br>Class A Stock Out Count: <b>%{customdata[3]}</b>"
                 "<br>Class A Total Stock Status Count: <b>%{customdata[4]}</b><extra></extra>"
             ),
-        )
-        _ = apply_executive_bar_style(
-            fig_zero, accent_color="#10b981", value_axis_title="Class A stock-status coverage count",
-            value_max=max(1, zero_coverage_max * 1.22), category_order=zero_order,
-            orientation="h", percent=False, height=max(410, 44 * len(zero_plot) + 130), right_margin=66,
-        )
-        _ = fig_zero.update_layout(
-            title_text=f"Top {len(zero_plot)} Branches with 0% Class A Stock Out Rate<br><span style='font-size:10px;color:#94a3b8'>ZERO-OOS LEADERS • RANKED BY CLASS A COVERAGE</span>"
+            percent=False,
+            positive=True,
+            text_values=zero_plot["Zero Rate Label"].tolist(),
+            reference_value=coverage_reference,
+            reference_label="Median coverage",
+            height=max(430, 48 * len(zero_plot) + 155),
         )
 
     return fig_high, fig_zero
 
 
 def create_styled_line_chart(df, y_col, title, subtitle, line_color, is_weekly, is_percentage=True, fill=False):
-    """Clean executive trend chart with identical source values and rounding logic."""
+    """Executive KPI chart: actual series + true broken/dashed fitted trend line.
+
+    Actual KPI values and rounding logic are unchanged. The trend line is a visual
+    least-squares fit on those displayed values and is clearly separated as a guide.
+    """
     chart_df = prepare_chart_series(df, y_col)
     fig = go.Figure()
 
@@ -1245,7 +1333,7 @@ def create_styled_line_chart(df, y_col, title, subtitle, line_color, is_weekly, 
         marker_sizes[-1] = 10.5
 
     hover_dates = chart_df["period"].dt.strftime("%d %b %Y")
-    trend_direction, direction_symbol = _trend_direction_for_series(chart_df["period"], plot_y, is_percentage)
+    fitted_y, trend_direction, direction_symbol = _trend_fit_for_series(chart_df["period"], plot_y, is_percentage)
     fillcolor = _hex_to_rgba(line_color, 0.08) if fill else None
     hover_template = "<b>%{customdata}</b><br>" + (
         f"{title}: <b>%{{y:.0%}}</b>" if is_percentage else f"{title}: <b>%{{y:,.0f}}</b>"
@@ -1268,7 +1356,27 @@ def create_styled_line_chart(df, y_col, title, subtitle, line_color, is_weekly, 
         cliponaxis=False,
     ))
 
+    # Keep the requested broken trend line. Unlike the earlier displaced guide,
+    # this dashed line is the true linear fit on the displayed actual series.
+    if fitted_y is not None:
+        trend_hover = "Trend guide: <b>%{y:.0%}</b>" if is_percentage else "Trend guide: <b>%{y:,.0f}</b>"
+        trend_hover += f"<br>Direction: <b>{trend_direction} {direction_symbol}</b><extra></extra>"
+        _ = fig.add_trace(go.Scatter(
+            x=chart_x,
+            y=fitted_y,
+            name=f"Trend {direction_symbol}",
+            mode="lines",
+            line=dict(width=2.2, dash="dash", color="rgba(148,163,184,0.95)"),
+            hovertemplate=trend_hover,
+            connectgaps=False,
+        ))
+
     max_observed = pd.to_numeric(plot_y, errors="coerce").max()
+    if fitted_y is not None:
+        finite_fit = np.asarray(fitted_y, dtype=float)
+        finite_fit = finite_fit[np.isfinite(finite_fit)]
+        if finite_fit.size:
+            max_observed = max(float(max_observed), float(np.nanmax(finite_fit)))
     y_max = max(default_ceiling, max_observed * 1.18) if pd.notna(max_observed) and max_observed > 0 else default_ceiling
     if is_percentage:
         y_max = max(y_max, 0.05)
@@ -1290,13 +1398,18 @@ def create_styled_line_chart(df, y_col, title, subtitle, line_color, is_weekly, 
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         height=365,
-        margin=dict(t=86, b=42, l=46, r=22),
+        margin=dict(t=90, b=42, l=46, r=22),
         hovermode="x unified",
         hoverlabel=dict(
             bgcolor=PLOTLY_HOVER_BG, bordercolor=PLOTLY_HOVER_BORDER,
             font=dict(color=PLOTLY_HOVER_TEXT, size=11, family=PLOTLY_FONT_FAMILY),
         ),
-        showlegend=False,
+        showlegend=True,
+        legend=dict(
+            orientation="h", yanchor="bottom", y=1.005, xanchor="right", x=0.995,
+            bgcolor="rgba(0,0,0,0)",
+            font=dict(size=9, color=PLOTLY_CHART_MUTED, family=PLOTLY_FONT_FAMILY),
+        ),
         font=dict(family=PLOTLY_FONT_FAMILY, color=PLOTLY_CHART_TEXT),
         title=dict(
             text=(
@@ -1473,6 +1586,22 @@ def _plotly_trace_color(trace, default="#6366f1"):
         if isinstance(color, str): return _mpl_hex(color, default)
     return default
 
+
+
+def _plotly_bar_colors(trace, default="#6366f1", count=0):
+    marker = getattr(trace, "marker", None)
+    color = getattr(marker, "color", None) if marker is not None else None
+    if isinstance(color, str):
+        return _mpl_hex(color, default)
+    if color is not None:
+        try:
+            values = list(color)
+            if values:
+                return [_mpl_hex(v, default) for v in values[:count or len(values)]]
+        except Exception:
+            pass
+    return default
+
 def ppt_figure_png(fig, width=1500, height=820):
     if not PPTX_EXPORT_AVAILABLE: raise RuntimeError("PowerPoint export requires 'python-pptx'.")
     if not MATPLOTLIB_AVAILABLE or plt is None: raise RuntimeError("PowerPoint chart rendering requires 'matplotlib'.")
@@ -1507,7 +1636,9 @@ def ppt_figure_png(fig, width=1500, height=820):
             x_labels = [str(v) for v in x]
             x_pos = list(range(len(x_labels)))
             y_num = pd.to_numeric(pd.Series(y), errors="coerce").tolist()
-            _ = ax.plot(x_pos, y_num, color=color, linewidth=line_width, alpha=trace_opacity, marker="o" if "markers" in mode else None, markersize=5, label=trace_name if trace_name else None, zorder=4)
+            line_dash = str(getattr(getattr(trace, "line", None), "dash", "solid") or "solid").lower()
+            mpl_line_style = {"dash": "--", "dot": ":", "dashdot": "-."}.get(line_dash, "-")
+            _ = ax.plot(x_pos, y_num, color=color, linewidth=line_width, linestyle=mpl_line_style, alpha=trace_opacity, marker="o" if "markers" in mode else None, markersize=5, label=trace_name if trace_name else None, zorder=4)
             fill_value = getattr(trace, "fill", None)
             if fill_value in {"tozeroy", "tonexty"}:
                 _ = ax.fill_between(x_pos, [0] * len(y_num), y_num, color=color, alpha=0.08, zorder=2)
@@ -1519,11 +1650,11 @@ def ppt_figure_png(fig, width=1500, height=820):
             category_values = x_labels
 
         elif trace_type == "bar":
-            marker_color = color
             ori = str(getattr(trace, "orientation", None) or orientation or "v").lower()
             if ori == "h":
                 categories = [str(v) for v in y]
                 values = pd.to_numeric(pd.Series(x), errors="coerce").fillna(0).tolist()
+                marker_color = _plotly_bar_colors(trace, color, len(values))
                 positions = list(range(len(categories)))
                 _ = ax.barh(positions, values, color=marker_color, edgecolor="#ffffff", linewidth=0.5, height=0.62, alpha=trace_opacity, zorder=3)
                 _ = ax.set_yticks(positions)
@@ -1537,6 +1668,7 @@ def ppt_figure_png(fig, width=1500, height=820):
             else:
                 categories = [str(v) for v in x]
                 values = pd.to_numeric(pd.Series(y), errors="coerce").fillna(0).tolist()
+                marker_color = _plotly_bar_colors(trace, color, len(values))
                 positions = list(range(len(categories)))
                 _ = ax.bar(positions, values, color=marker_color, edgecolor="#ffffff", linewidth=0.5, width=0.62, alpha=trace_opacity, zorder=3)
                 _ = ax.set_xticks(positions)
@@ -1574,6 +1706,35 @@ def ppt_figure_png(fig, width=1500, height=820):
                 if orientation == "h": _ = ax.set_xlim(lo, hi)
                 else: _ = ax.set_ylim(lo, hi)
         except Exception: pass
+
+    # Preserve Plotly reference lines (e.g. area mean / median coverage) in PPT exports.
+    layout_shapes = list(getattr(layout, "shapes", []) or []) if layout is not None else []
+    for shape in layout_shapes:
+        if str(getattr(shape, "type", "line") or "line").lower() != "line":
+            continue
+        try:
+            x0, x1 = float(getattr(shape, "x0", np.nan)), float(getattr(shape, "x1", np.nan))
+            y0, y1 = getattr(shape, "y0", None), getattr(shape, "y1", None)
+        except Exception:
+            continue
+        shape_line = getattr(shape, "line", None)
+        shape_color = _mpl_hex(getattr(shape_line, "color", None), muted)
+        shape_width = float(getattr(shape_line, "width", 1.3) or 1.3)
+        shape_dash = str(getattr(shape_line, "dash", "dot") or "dot").lower()
+        shape_style = {"dash": "--", "dot": ":", "dashdot": "-."}.get(shape_dash, "-")
+        if np.isfinite(x0) and np.isfinite(x1) and abs(x0 - x1) < 1e-12:
+            _ = ax.axvline(x0, color=shape_color, linewidth=shape_width, linestyle=shape_style, alpha=0.9, zorder=5)
+
+    # Preserve the compact labels generated by Plotly add_vline(annotation_text=...).
+    layout_annotations = list(getattr(layout, "annotations", []) or []) if layout is not None else []
+    for annotation in layout_annotations:
+        try:
+            annotation_x = float(getattr(annotation, "x", np.nan))
+        except Exception:
+            continue
+        annotation_text = _clean_plotly_text(getattr(annotation, "text", ""))
+        if annotation_text and np.isfinite(annotation_x) and orientation == "h":
+            _ = ax.text(annotation_x, 1.01, annotation_text, transform=ax.get_xaxis_transform(), ha="center", va="bottom", fontsize=7, color=muted, clip_on=False)
 
     _ = ax.grid(axis="y" if orientation != "h" else "x", color=grid, alpha=0.42, linewidth=0.7)
     _ = ax.grid(axis="x" if orientation != "h" else "y", visible=False)
