@@ -2423,7 +2423,7 @@ with tab_branch_requests:
     st.markdown("<br>", unsafe_allow_html=True)
     section_heading(
         "Branch Request Status",
-        "Branch + Model request validation • model dropdown • live Raw_Data projection",
+        
     )
 
     ads_source_available = bool(
