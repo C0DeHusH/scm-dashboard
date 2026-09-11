@@ -1900,7 +1900,7 @@ def build_branch_request_excel(report_df):
 
         merge_value(
             ws, "A10:H10",
-            "Projection basis: New Inventory = Current Inventory + Quantity Request. New DoI = New Inventory ÷ Average Daily Sales (Qty) from Raw_Data.",
+            "Print basis: New Inventory = Current Inventory + Quantity Request. Average Daily Sales (Qty) is sourced directly from Raw_Data.",
             fill=PatternFill("solid", fgColor=soft_indigo),
             font=Font(italic=True, size=8, color=slate),
             alignment=Alignment(horizontal="left", vertical="center", wrap_text=True),
@@ -1968,13 +1968,13 @@ def build_branch_request_excel(report_df):
                 ("A", "B", "AVG DAILY SALES"),
                 ("C", "D", "CURRENT DOI"),
                 ("E", "F", "NEW INVENTORY"),
-                ("G", "H", "NEW DOI"),
+                ("G", "H", "SUGGESTED TRANSFER"),
             ]
             values2 = [
                 ("A", "B", round(safe_request_number(item.get("Average Daily Sales (Qty)", 0), 0), 4) if pd.notna(item.get("Average Daily Sales (Qty)")) else "N/A"),
                 ("C", "D", round(safe_request_number(item.get("Current DoI", 0), 0), 2) if pd.notna(item.get("Current DoI")) else "N/A"),
                 ("E", "F", int(safe_request_number(item.get("New Inventory", 0), 0)) if pd.notna(item.get("New Inventory")) else "N/A"),
-                ("G", "H", round(safe_request_number(item.get("New DoI", 0), 0), 2) if pd.notna(item.get("New DoI")) else "N/A"),
+                ("G", "H", int(safe_request_number(item.get("Suggested Transfer", 0), 0)) if pd.notna(item.get("Suggested Transfer")) else "N/A"),
             ]
             for start_col, end_col, label in labels2:
                 merge_value(
@@ -2040,8 +2040,12 @@ def build_branch_request_excel(report_df):
                 alignment=Alignment(horizontal="center", vertical="center"),
                 border=thin_border,
             )
+            print_note = (
+                "New Inventory = Current Inventory + Quantity Request. "
+                "Average Daily Sales (Qty) is sourced from Raw_Data."
+            )
             merge_value(
-                ws, f"C{calc_row}:H{calc_row}", str(item.get("Calculation Note", "") or "—"),
+                ws, f"C{calc_row}:H{calc_row}", print_note,
                 fill=PatternFill("solid", fgColor=white),
                 font=Font(size=8, color=slate),
                 alignment=Alignment(horizontal="left", vertical="center", wrap_text=True),
@@ -2061,7 +2065,6 @@ def build_branch_request_excel(report_df):
 
         # True portrait print setup for A4 paper.
         ws.sheet_view.showGridLines = False
-        ws.freeze_panes = "A11"
         ws.page_setup.orientation = "portrait"
         ws.page_setup.paperSize = ws.PAPERSIZE_A4
         ws.page_setup.fitToWidth = 1
@@ -2861,26 +2864,27 @@ with tab_branch_requests:
                         file_name=f"Branch_Request_{safe_branch}_{date.today().strftime('%Y%m%d')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         use_container_width=True,
-                        key="branch_request_download_portrait_xlsx_v6",
+                        key="branch_request_download_portrait_xlsx_v7",
                     )
                 except Exception as exc:
                     st.error(f"Excel export unavailable: {exc}")
 
             with download_col2:
-                branch_request_csv = request_report.to_csv(index=False).encode("utf-8-sig")
+                csv_report = request_report.drop(columns=["New DoI"], errors="ignore").copy()
+                branch_request_csv = csv_report.to_csv(index=False).encode("utf-8-sig")
                 st.download_button(
                     "⬇ Download CSV",
                     data=branch_request_csv,
                     file_name=f"Branch_Request_{date.today().strftime('%Y%m%d')}.csv",
                     mime="text/csv",
                     use_container_width=True,
-                    key="branch_request_download_csv_v6",
+                    key="branch_request_download_csv_v7",
                 )
 
             with note_col:
                 st.caption(
-                    "New DoI uses the updated Raw_Data field Average Daily Sales (Qty). "
-                    "The Excel report remains A4 Portrait and includes all requested models for the selected branch."
+                    "New DoI remains available on-screen only. It is excluded from Excel/CSV downloads. "
+                    "The Excel report remains A4 Portrait, has no frozen panes, and includes all requested models for the selected branch."
                 )
 
             with st.expander("View Full Validation Data"):
