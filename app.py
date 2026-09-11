@@ -1688,247 +1688,389 @@ def build_branch_request_report(raw_data, request_lines):
 
 
 def build_branch_request_excel(report_df):
-    """Create a polished, print-ready Branch Request validation workbook in memory."""
+    """Create a portrait, branch-specific Branch Request validation workbook."""
     output = io.BytesIO()
     try:
         from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
-        from openpyxl.utils import get_column_letter
     except Exception as exc:
         raise RuntimeError("Excel report export requires openpyxl.") from exc
 
     export_df = report_df.copy()
-    sheet_name = "Branch Request Report"
+    if export_df.empty:
+        raise ValueError("There are no requested items to export.")
 
-    # Executive summary values shown above the detail table.
+    branch_values = [
+        str(value).strip()
+        for value in export_df.get("Branch", pd.Series(dtype=str)).dropna().unique().tolist()
+        if str(value).strip()
+    ]
+    if len(branch_values) != 1:
+        raise ValueError("Portrait Branch Request report must contain one requesting branch per file.")
+
+    requesting_branch = branch_values[0]
+    area_values = [
+        str(value).strip()
+        for value in export_df.get("Area", pd.Series(dtype=str)).dropna().unique().tolist()
+        if str(value).strip()
+    ]
+    requesting_area = area_values[0] if area_values else ""
+
     total_lines = len(export_df)
-    total_request_qty = int(pd.to_numeric(export_df.get("Request Quantity", pd.Series(dtype=float)), errors="coerce").fillna(0).sum())
-    risk_mask = export_df.get("Stock Status", pd.Series(dtype=str)).fillna("").astype(str).map(stock_status_style_class).isin(["stockout", "critical", "low"])
+    total_request_qty = int(
+        pd.to_numeric(export_df.get("Request Quantity", pd.Series(dtype=float)), errors="coerce")
+        .fillna(0)
+        .sum()
+    )
+    risk_mask = (
+        export_df.get("Stock Status", pd.Series(dtype=str))
+        .fillna("")
+        .astype(str)
+        .map(stock_status_style_class)
+        .isin(["stockout", "critical", "low"])
+    )
     risk_lines = int(risk_mask.sum()) if len(risk_mask) else 0
-    validated_lines = int(export_df.get("Request Check", pd.Series(dtype=str)).fillna("").astype(str).str.startswith("VALIDATED").sum())
+    validated_lines = int(
+        export_df.get("Request Check", pd.Series(dtype=str))
+        .fillna("")
+        .astype(str)
+        .str.startswith("VALIDATED")
+        .sum()
+    )
 
-    # Detail table starts lower to leave room for title, summary cards, and methodology.
-    detail_header_row = 9
-    detail_startrow = detail_header_row - 1
+    # Fixed 8-column portrait canvas. Requested items flow vertically down the page.
+    sheet_name = "Branch Request"
+    navy = "0F172A"
+    indigo = "4F46E5"
+    blue = "2563EB"
+    green = "059669"
+    red = "DC2626"
+    amber = "D97706"
+    slate = "475569"
+    muted = "64748B"
+    light = "F8FAFC"
+    soft_indigo = "EEF2FF"
+    border_color = "D7DEE8"
+    white = "FFFFFF"
+
+    thin_border = Border(
+        left=Side(style="thin", color=border_color),
+        right=Side(style="thin", color=border_color),
+        top=Side(style="thin", color=border_color),
+        bottom=Side(style="thin", color=border_color),
+    )
+
+    status_colors = {
+        "stockout": ("FEE2E2", "B91C1C"),
+        "critical": ("FFEDD5", "C2410C"),
+        "low": ("FEF3C7", "A16207"),
+        "ok": ("DCFCE7", "166534"),
+        "overstock": ("E0F2FE", "0369A1"),
+        "neutral": ("F1F5F9", "475569"),
+    }
+
+    def merge_value(ws, cell_range, value, *, fill=None, font=None, alignment=None, border=None):
+        ws.merge_cells(cell_range)
+        cell = ws[cell_range.split(":")[0]]
+        cell.value = value
+        if fill is not None:
+            cell.fill = fill
+        if font is not None:
+            cell.font = font
+        if alignment is not None:
+            cell.alignment = alignment
+        if border is not None:
+            min_col = ws[cell_range.split(":")[0]].column
+            min_row = ws[cell_range.split(":")[0]].row
+            max_col = ws[cell_range.split(":")[1]].column
+            max_row = ws[cell_range.split(":")[1]].row
+            for row in ws.iter_rows(min_row=min_row, max_row=max_row, min_col=min_col, max_col=max_col):
+                for border_cell in row:
+                    border_cell.border = border
+                    if fill is not None:
+                        border_cell.fill = fill
+        return cell
 
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        export_df.to_excel(writer, sheet_name=sheet_name, index=False, startrow=detail_startrow)
-        ws = writer.book[sheet_name]
-        max_col = max(1, len(export_df.columns))
-        last_col_letter = get_column_letter(max_col)
-        first_data_row = detail_header_row + 1
-        last_data_row = detail_header_row + len(export_df)
+        workbook = writer.book
+        ws = workbook.create_sheet(sheet_name)
+        # Remove the default empty sheet created by ExcelWriter if present.
+        for existing in list(workbook.worksheets):
+            if existing.title != sheet_name and existing.max_row == 1 and existing.max_column == 1 and existing["A1"].value is None:
+                workbook.remove(existing)
 
-        # Palette
-        navy = "0F172A"
-        indigo = "4F46E5"
-        blue = "2563EB"
-        green = "059669"
-        red = "DC2626"
-        amber = "D97706"
-        slate = "475569"
-        light_slate = "F8FAFC"
-        border_color = "D7DEE8"
-        white = "FFFFFF"
+        # Portrait-friendly column widths: A:H only.
+        widths = {"A": 11, "B": 11, "C": 13, "D": 13, "E": 12, "F": 12, "G": 14, "H": 14}
+        for col, width in widths.items():
+            ws.column_dimensions[col].width = width
 
-        # Title block
-        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max_col)
-        ws["A1"] = "BRANCH REQUEST VALIDATION REPORT"
-        ws["A1"].font = Font(bold=True, size=18, color=white)
-        ws["A1"].fill = PatternFill("solid", fgColor=navy)
-        ws["A1"].alignment = Alignment(horizontal="left", vertical="center")
-        ws.row_dimensions[1].height = 34
-
-        ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=max_col)
-        ws["A2"] = "MUTI MC SCM Executive Control Tower • Branch Request Status"
-        ws["A2"].font = Font(bold=True, size=10, color="CBD5E1")
-        ws["A2"].fill = PatternFill("solid", fgColor=navy)
-        ws["A2"].alignment = Alignment(horizontal="left", vertical="center")
-        ws.row_dimensions[2].height = 22
-
-        # Four executive summary cards. Use merged groups where the table is wide enough.
-        card_groups = [
-            (1, min(3, max_col), "REQUEST LINES", f"{total_lines:,}", blue),
-            (4, min(6, max_col), "TOTAL REQUEST QTY", f"{total_request_qty:,}", green),
-            (7, min(9, max_col), "RISK LINES", f"{risk_lines:,}", red if risk_lines else green),
-            (10, max_col, "VALIDATED", f"{validated_lines:,} / {total_lines:,}", indigo),
-        ]
-        for start_col, end_col, label, value, accent in card_groups:
-            if start_col > max_col:
-                continue
-            end_col = max(start_col, end_col)
-            ws.merge_cells(start_row=4, start_column=start_col, end_row=4, end_column=end_col)
-            ws.merge_cells(start_row=5, start_column=start_col, end_row=5, end_column=end_col)
-            top_cell = ws.cell(row=4, column=start_col)
-            value_cell = ws.cell(row=5, column=start_col)
-            top_cell.value = label
-            value_cell.value = value
-            top_cell.font = Font(bold=True, size=9, color=slate)
-            value_cell.font = Font(bold=True, size=16, color=accent)
-            top_cell.alignment = Alignment(horizontal="center", vertical="center")
-            value_cell.alignment = Alignment(horizontal="center", vertical="center")
-            for r in (4, 5):
-                for c in range(start_col, end_col + 1):
-                    ws.cell(r, c).fill = PatternFill("solid", fgColor=light_slate)
-                    ws.cell(r, c).border = Border(
-                        left=Side(style="thin", color=border_color),
-                        right=Side(style="thin", color=border_color),
-                        top=Side(style="thin", color=border_color),
-                        bottom=Side(style="thin", color=border_color),
-                    )
-        ws.row_dimensions[4].height = 20
-        ws.row_dimensions[5].height = 28
-
-        # Report metadata + calculation rule
-        ws.merge_cells(start_row=7, start_column=1, end_row=7, end_column=max_col)
-        ws["A7"] = (
-            f"Generated: {datetime.now().strftime('%d %b %Y %I:%M %p')}  |  Source: Active Raw_Data  |  "
-            "Projection: New Inventory = Inventory + Request Quantity; New DoI uses the implied daily demand from Current Inventory ÷ Current DoI."
+        # Executive title block.
+        merge_value(
+            ws, "A1:H1", "BRANCH REQUEST STATUS REPORT",
+            fill=PatternFill("solid", fgColor=navy),
+            font=Font(bold=True, size=18, color=white),
+            alignment=Alignment(horizontal="left", vertical="center"),
         )
-        ws["A7"].font = Font(size=9, italic=True, color=slate)
-        ws["A7"].fill = PatternFill("solid", fgColor="EEF2FF")
-        ws["A7"].alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
-        ws.row_dimensions[7].height = 34
+        merge_value(
+            ws, "A2:H2", "MUTI MC SCM Executive Control Tower • Inventory Request Validation",
+            fill=PatternFill("solid", fgColor=navy),
+            font=Font(bold=True, size=9, color="CBD5E1"),
+            alignment=Alignment(horizontal="left", vertical="center"),
+        )
+        ws.row_dimensions[1].height = 32
+        ws.row_dimensions[2].height = 20
 
-        # Detail table header
-        header_fill = PatternFill("solid", fgColor=indigo)
-        header_font = Font(bold=True, color=white, size=9)
-        for cell in ws[detail_header_row]:
-            cell.fill = header_fill
-            cell.font = header_font
-            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-            cell.border = Border(
-                left=Side(style="thin", color="6366F1"),
-                right=Side(style="thin", color="6366F1"),
-                top=Side(style="thin", color="6366F1"),
-                bottom=Side(style="thin", color="4338CA"),
-            )
-        ws.row_dimensions[detail_header_row].height = 34
+        # Requesting Branch is intentionally the most prominent metadata field.
+        merge_value(
+            ws, "A4:B4", "REQUESTING BRANCH",
+            fill=PatternFill("solid", fgColor=indigo),
+            font=Font(bold=True, size=9, color=white),
+            alignment=Alignment(horizontal="center", vertical="center"),
+            border=thin_border,
+        )
+        merge_value(
+            ws, "C4:H4", requesting_branch,
+            fill=PatternFill("solid", fgColor=soft_indigo),
+            font=Font(bold=True, size=15, color=navy),
+            alignment=Alignment(horizontal="left", vertical="center"),
+            border=thin_border,
+        )
+        ws.row_dimensions[4].height = 30
 
-        status_colors = {
-            "stockout": ("FEE2E2", "B91C1C"),
-            "critical": ("FFEDD5", "C2410C"),
-            "low": ("FEF3C7", "A16207"),
-            "ok": ("DCFCE7", "166534"),
-            "over": ("E0F2FE", "0369A1"),
-            "overstock": ("E0F2FE", "0369A1"),
-        }
+        merge_value(
+            ws, "A5:B5", "AREA",
+            fill=PatternFill("solid", fgColor=light),
+            font=Font(bold=True, size=8, color=slate),
+            alignment=Alignment(horizontal="center", vertical="center"),
+            border=thin_border,
+        )
+        merge_value(
+            ws, "C5:D5", requesting_area or "—",
+            fill=PatternFill("solid", fgColor=white),
+            font=Font(bold=True, size=9, color=navy),
+            alignment=Alignment(horizontal="center", vertical="center"),
+            border=thin_border,
+        )
+        merge_value(
+            ws, "E5:F5", "REPORT GENERATED",
+            fill=PatternFill("solid", fgColor=light),
+            font=Font(bold=True, size=8, color=slate),
+            alignment=Alignment(horizontal="center", vertical="center"),
+            border=thin_border,
+        )
+        merge_value(
+            ws, "G5:H5", datetime.now().strftime("%d %b %Y • %I:%M %p"),
+            fill=PatternFill("solid", fgColor=white),
+            font=Font(size=8, color=navy),
+            alignment=Alignment(horizontal="center", vertical="center", wrap_text=True),
+            border=thin_border,
+        )
+        ws.row_dimensions[5].height = 24
 
-        column_index = {name: idx for idx, name in enumerate(export_df.columns, start=1)}
-        stock_status_col = column_index.get("Stock Status")
-        request_check_col = column_index.get("Request Check")
-        current_doi_col = column_index.get("Current DoI")
-        new_doi_col = column_index.get("New DoI")
-        remarks_col = column_index.get("Remarks / Justification")
-
-        for row_idx in range(first_data_row, last_data_row + 1):
-            # Zebra striping and soft gridlines
-            base_fill = "FFFFFF" if (row_idx - first_data_row) % 2 == 0 else "F8FAFC"
-            for col_idx in range(1, max_col + 1):
-                cell = ws.cell(row=row_idx, column=col_idx)
-                cell.fill = PatternFill("solid", fgColor=base_fill)
-                cell.font = Font(size=9, color="1E293B")
-                cell.alignment = Alignment(vertical="center", wrap_text=True)
-                cell.border = Border(bottom=Side(style="hair", color=border_color))
-            ws.row_dimensions[row_idx].height = 28
-
-            if stock_status_col:
-                status_cell = ws.cell(row=row_idx, column=stock_status_col)
-                status_key = normalize_request_key(status_cell.value).replace(" ", "")
-                fill_key = "overstock" if status_key in {"overstock", "over"} else status_key
-                if fill_key in status_colors:
-                    fill_color, font_color = status_colors[fill_key]
-                    status_cell.fill = PatternFill("solid", fgColor=fill_color)
-                    status_cell.font = Font(bold=True, color=font_color, size=9)
-                    status_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-
-            if request_check_col:
-                check_cell = ws.cell(row=row_idx, column=request_check_col)
-                is_valid = str(check_cell.value or "").startswith("VALIDATED")
-                check_cell.fill = PatternFill("solid", fgColor="DCFCE7" if is_valid else "FEE2E2")
-                check_cell.font = Font(bold=True, color="166534" if is_valid else "B91C1C", size=9)
-                check_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-
-            if remarks_col:
-                remarks_cell = ws.cell(row=row_idx, column=remarks_col)
-                if str(remarks_cell.value or "").strip():
-                    remarks_cell.fill = PatternFill("solid", fgColor="FFF7ED")
-                    remarks_cell.font = Font(color="9A3412", size=9)
-
-        for doi_col in [current_doi_col, new_doi_col]:
-            if doi_col:
-                for row_idx in range(first_data_row, last_data_row + 1):
-                    ws.cell(row=row_idx, column=doi_col).number_format = "0.00"
-                    ws.cell(row=row_idx, column=doi_col).alignment = Alignment(horizontal="center", vertical="center")
-
-        # Center numeric/control fields for clean reporting.
-        centered_columns = [
-            "Request Quantity", "Inventory", "Stock Status", "Current DoI", "New Inventory",
-            "New DoI", "Area", "Class", "Suggested Transfer", "Implied Avg Daily Sales", "Request Check"
+        # Summary cards, arranged 2x2 to fit portrait width cleanly.
+        summary_cards = [
+            ("A7:B7", "A8:B8", "REQUESTED ITEMS", f"{total_lines:,}", blue),
+            ("C7:D7", "C8:D8", "TOTAL REQUEST QTY", f"{total_request_qty:,}", green),
+            ("E7:F7", "E8:F8", "RISK ITEMS", f"{risk_lines:,}", red if risk_lines else green),
+            ("G7:H7", "G8:H8", "VALIDATED", f"{validated_lines:,}/{total_lines:,}", indigo),
         ]
-        for col_name in centered_columns:
-            col_idx = column_index.get(col_name)
-            if col_idx:
-                for row_idx in range(first_data_row, last_data_row + 1):
-                    ws.cell(row=row_idx, column=col_idx).alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        for label_range, value_range, label, value, accent in summary_cards:
+            merge_value(
+                ws, label_range, label,
+                fill=PatternFill("solid", fgColor=light),
+                font=Font(bold=True, size=8, color=slate),
+                alignment=Alignment(horizontal="center", vertical="center"),
+                border=thin_border,
+            )
+            merge_value(
+                ws, value_range, value,
+                fill=PatternFill("solid", fgColor=white),
+                font=Font(bold=True, size=15, color=accent),
+                alignment=Alignment(horizontal="center", vertical="center"),
+                border=thin_border,
+            )
+        ws.row_dimensions[7].height = 19
+        ws.row_dimensions[8].height = 27
 
-        width_map = {
-            "Branch": 23,
-            "Model": 24,
-            "Request Quantity": 16,
-            "Inventory": 12,
-            "Stock Status": 16,
-            "Current DoI": 13,
-            "New Inventory": 14,
-            "New DoI": 12,
-            "Remarks / Justification": 38,
-            "Area": 14,
-            "Class": 10,
-            "Suggested Transfer": 18,
-            "Implied Avg Daily Sales": 23,
-            "Request Check": 24,
-            "Calculation Note": 48,
-        }
-        for idx, col_name in enumerate(export_df.columns, start=1):
-            ws.column_dimensions[get_column_letter(idx)].width = width_map.get(col_name, 16)
+        merge_value(
+            ws, "A10:H10",
+            "Projection basis: New Inventory = Current Inventory + Request Quantity. New DoI uses the implied daily demand derived from Current Inventory ÷ Current DoI.",
+            fill=PatternFill("solid", fgColor=soft_indigo),
+            font=Font(italic=True, size=8, color=slate),
+            alignment=Alignment(horizontal="left", vertical="center", wrap_text=True),
+            border=thin_border,
+        )
+        ws.row_dimensions[10].height = 32
 
-        # Usability and print setup
-        ws.freeze_panes = f"A{first_data_row}"
-        if len(export_df):
-            ws.auto_filter.ref = f"A{detail_header_row}:{last_col_letter}{last_data_row}"
+        # Multiple requested items for the selected branch are stacked vertically.
+        current_row = 12
+        for item_no, (_, item) in enumerate(export_df.reset_index(drop=True).iterrows(), start=1):
+            model = str(item.get("Model", "") or "").strip()
+            status = str(item.get("Stock Status", "") or "").strip() or "N/A"
+            status_class = stock_status_style_class(status)
+            status_fill, status_font = status_colors.get(status_class, status_colors["neutral"])
+            request_check = str(item.get("Request Check", "") or "").strip()
+            is_valid = request_check.startswith("VALIDATED")
+
+            merge_value(
+                ws, f"A{current_row}:H{current_row}",
+                f"ITEM {item_no:02d}  •  {model}",
+                fill=PatternFill("solid", fgColor=navy),
+                font=Font(bold=True, size=11, color=white),
+                alignment=Alignment(horizontal="left", vertical="center"),
+                border=thin_border,
+            )
+            ws.row_dimensions[current_row].height = 25
+
+            label_row = current_row + 1
+            value_row = current_row + 2
+            labels = [
+                ("A", "B", "REQUEST QTY"),
+                ("C", "D", "CURRENT INVENTORY"),
+                ("E", "F", "CURRENT DOI"),
+                ("G", "H", "STOCK STATUS"),
+            ]
+            values = [
+                ("A", "B", int(safe_request_number(item.get("Request Quantity", 0), 0))),
+                ("C", "D", int(safe_request_number(item.get("Inventory", 0), 0)) if pd.notna(item.get("Inventory")) else "N/A"),
+                ("E", "F", round(safe_request_number(item.get("Current DoI", 0), 0), 2) if pd.notna(item.get("Current DoI")) else "N/A"),
+                ("G", "H", status),
+            ]
+            for start_col, end_col, label in labels:
+                merge_value(
+                    ws, f"{start_col}{label_row}:{end_col}{label_row}", label,
+                    fill=PatternFill("solid", fgColor=light),
+                    font=Font(bold=True, size=7, color=muted),
+                    alignment=Alignment(horizontal="center", vertical="center"),
+                    border=thin_border,
+                )
+            for start_col, end_col, value in values:
+                is_status = start_col == "G"
+                merge_value(
+                    ws, f"{start_col}{value_row}:{end_col}{value_row}", value,
+                    fill=PatternFill("solid", fgColor=status_fill if is_status else white),
+                    font=Font(bold=True, size=10, color=status_font if is_status else navy),
+                    alignment=Alignment(horizontal="center", vertical="center", wrap_text=True),
+                    border=thin_border,
+                )
+            ws.row_dimensions[label_row].height = 18
+            ws.row_dimensions[value_row].height = 25
+
+            label_row2 = current_row + 3
+            value_row2 = current_row + 4
+            labels2 = [
+                ("A", "B", "NEW INVENTORY"),
+                ("C", "D", "NEW DOI"),
+                ("E", "F", "CLASS"),
+                ("G", "H", "SUGGESTED TRANSFER"),
+            ]
+            values2 = [
+                ("A", "B", int(safe_request_number(item.get("New Inventory", 0), 0)) if pd.notna(item.get("New Inventory")) else "N/A"),
+                ("C", "D", round(safe_request_number(item.get("New DoI", 0), 0), 2) if pd.notna(item.get("New DoI")) else "N/A"),
+                ("E", "F", str(item.get("Class", "") or "—")),
+                ("G", "H", int(safe_request_number(item.get("Suggested Transfer", 0), 0)) if pd.notna(item.get("Suggested Transfer")) else "N/A"),
+            ]
+            for start_col, end_col, label in labels2:
+                merge_value(
+                    ws, f"{start_col}{label_row2}:{end_col}{label_row2}", label,
+                    fill=PatternFill("solid", fgColor=light),
+                    font=Font(bold=True, size=7, color=muted),
+                    alignment=Alignment(horizontal="center", vertical="center"),
+                    border=thin_border,
+                )
+            for start_col, end_col, value in values2:
+                merge_value(
+                    ws, f"{start_col}{value_row2}:{end_col}{value_row2}", value,
+                    fill=PatternFill("solid", fgColor=white),
+                    font=Font(bold=True, size=10, color=navy),
+                    alignment=Alignment(horizontal="center", vertical="center", wrap_text=True),
+                    border=thin_border,
+                )
+            ws.row_dimensions[label_row2].height = 18
+            ws.row_dimensions[value_row2].height = 25
+
+            remarks_label_row = current_row + 5
+            remarks_value_row = current_row + 6
+            merge_value(
+                ws, f"A{remarks_label_row}:H{remarks_label_row}", "REMARKS / JUSTIFICATION",
+                fill=PatternFill("solid", fgColor="FFF7ED"),
+                font=Font(bold=True, size=7, color="9A3412"),
+                alignment=Alignment(horizontal="left", vertical="center"),
+                border=thin_border,
+            )
+            remarks = str(item.get("Remarks / Justification", "") or "").strip() or "—"
+            merge_value(
+                ws, f"A{remarks_value_row}:H{remarks_value_row}", remarks,
+                fill=PatternFill("solid", fgColor="FFFBEB"),
+                font=Font(size=9, color="78350F"),
+                alignment=Alignment(horizontal="left", vertical="top", wrap_text=True),
+                border=thin_border,
+            )
+            ws.row_dimensions[remarks_label_row].height = 18
+            ws.row_dimensions[remarks_value_row].height = 34
+
+            validation_row = current_row + 7
+            merge_value(
+                ws, f"A{validation_row}:B{validation_row}", "VALIDATION",
+                fill=PatternFill("solid", fgColor=light),
+                font=Font(bold=True, size=7, color=muted),
+                alignment=Alignment(horizontal="center", vertical="center"),
+                border=thin_border,
+            )
+            merge_value(
+                ws, f"C{validation_row}:H{validation_row}", request_check or "—",
+                fill=PatternFill("solid", fgColor="DCFCE7" if is_valid else "FEE2E2"),
+                font=Font(bold=True, size=8, color="166534" if is_valid else "B91C1C"),
+                alignment=Alignment(horizontal="left", vertical="center", wrap_text=True),
+                border=thin_border,
+            )
+            ws.row_dimensions[validation_row].height = 22
+
+            calc_row = current_row + 8
+            merge_value(
+                ws, f"A{calc_row}:B{calc_row}", "CALCULATION NOTE",
+                fill=PatternFill("solid", fgColor=light),
+                font=Font(bold=True, size=7, color=muted),
+                alignment=Alignment(horizontal="center", vertical="center"),
+                border=thin_border,
+            )
+            merge_value(
+                ws, f"C{calc_row}:H{calc_row}", str(item.get("Calculation Note", "") or "—"),
+                fill=PatternFill("solid", fgColor=white),
+                font=Font(size=8, color=slate),
+                alignment=Alignment(horizontal="left", vertical="center", wrap_text=True),
+                border=thin_border,
+            )
+            ws.row_dimensions[calc_row].height = 28
+
+            current_row = current_row + 10
+
+        signoff_row = current_row + 1
+        merge_value(ws, f"A{signoff_row}:C{signoff_row}", "__________________________", alignment=Alignment(horizontal="center"), font=Font(size=9, color=slate))
+        merge_value(ws, f"D{signoff_row}:F{signoff_row}", "__________________________", alignment=Alignment(horizontal="center"), font=Font(size=9, color=slate))
+        merge_value(ws, f"G{signoff_row}:H{signoff_row}", "____________", alignment=Alignment(horizontal="center"), font=Font(size=9, color=slate))
+        merge_value(ws, f"A{signoff_row+1}:C{signoff_row+1}", "Prepared / Reviewed By", alignment=Alignment(horizontal="center"), font=Font(bold=True, size=8, color=slate))
+        merge_value(ws, f"D{signoff_row+1}:F{signoff_row+1}", "Approved By", alignment=Alignment(horizontal="center"), font=Font(bold=True, size=8, color=slate))
+        merge_value(ws, f"G{signoff_row+1}:H{signoff_row+1}", "Date", alignment=Alignment(horizontal="center"), font=Font(bold=True, size=8, color=slate))
+
+        # True portrait print setup for A4 paper.
         ws.sheet_view.showGridLines = False
-        ws.page_setup.orientation = "landscape"
+        ws.freeze_panes = "A11"
+        ws.page_setup.orientation = "portrait"
+        ws.page_setup.paperSize = ws.PAPERSIZE_A4
         ws.page_setup.fitToWidth = 1
         ws.page_setup.fitToHeight = 0
         ws.sheet_properties.pageSetUpPr.fitToPage = True
-        ws.print_title_rows = f"1:{detail_header_row}"
-        ws.print_area = f"A1:{last_col_letter}{max(last_data_row, detail_header_row)}"
-        ws.oddFooter.center.text = "MUTI MC SCM • Branch Request Validation"
+        ws.page_margins.left = 0.30
+        ws.page_margins.right = 0.30
+        ws.page_margins.top = 0.45
+        ws.page_margins.bottom = 0.45
+        ws.page_margins.header = 0.18
+        ws.page_margins.footer = 0.18
+        ws.print_title_rows = "1:10"
+        ws.print_area = f"A1:H{signoff_row + 1}"
+        ws.oddFooter.left.text = requesting_branch
+        ws.oddFooter.center.text = "MUTI MC SCM • Branch Request Status"
         ws.oddFooter.right.text = "Page &P of &N"
-        ws.oddFooter.left.text = "Generated &D &T"
-
-        # Reviewer sign-off area after the table.
-        signoff_row = max(last_data_row + 3, detail_header_row + 4)
-        if max_col >= 6:
-            left_end = max(2, max_col // 3)
-            middle_start = left_end + 2
-            middle_end = min(max_col - 2, middle_start + max(2, max_col // 3) - 1)
-            right_start = min(max_col, middle_end + 2)
-            signoff_groups = [
-                (1, left_end, "Prepared / Reviewed By"),
-                (middle_start, middle_end, "Approved By"),
-                (right_start, max_col, "Date"),
-            ]
-            for start_col, end_col, label in signoff_groups:
-                if start_col > max_col or end_col < start_col:
-                    continue
-                ws.merge_cells(start_row=signoff_row, start_column=start_col, end_row=signoff_row, end_column=end_col)
-                ws.cell(signoff_row, start_col).value = "____________________________"
-                ws.cell(signoff_row, start_col).alignment = Alignment(horizontal="center")
-                ws.cell(signoff_row, start_col).font = Font(color=slate, size=9)
-                ws.merge_cells(start_row=signoff_row + 1, start_column=start_col, end_row=signoff_row + 1, end_column=end_col)
-                ws.cell(signoff_row + 1, start_col).value = label
-                ws.cell(signoff_row + 1, start_col).alignment = Alignment(horizontal="center")
-                ws.cell(signoff_row + 1, start_col).font = Font(bold=True, color=slate, size=8)
 
     output.seek(0)
     return output.getvalue()
@@ -2319,22 +2461,8 @@ with tab_branch_requests:
     st.markdown("<br>", unsafe_allow_html=True)
     section_heading(
         "Branch Request Status",
-        "Validate Branch + Model requests against Raw_Data and simulate inventory coverage after the requested quantity",
+        "Branch-centered request validation • multiple requested models • automatic projection from Raw_Data",
     )
-
-    st.markdown(
-        """
-        <div class='import-dialog-note' style='margin-bottom:1rem;'>
-            <b>Purpose:</b> Check a branch request using the same active <b>Raw_Data</b> source as the Inventory Control Tower.
-            Enter only one <b>Request Quantity</b>. The system shows Current Inventory, Stock Status, Current DoI,
-            projected New Inventory, projected New DoI, and the user-entered <b>Remarks / Justification</b>.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    if "branch_request_lines" not in st.session_state:
-        st.session_state["branch_request_lines"] = []
 
     request_source = raw_data.copy()
     request_source["branch"] = request_source["branch"].fillna("").astype(str).str.strip()
@@ -2345,180 +2473,207 @@ with tab_branch_requests:
     if not branch_options:
         st.warning("No Branch + Model records are available in Raw_Data.")
     else:
-        input_col1, input_col2, input_col3 = st.columns([2.3, 2.3, 1.2], gap="small")
-
-        with input_col1:
+        control_col, guide_col = st.columns([2.2, 4.8], gap="small")
+        with control_col:
             request_branch = st.selectbox(
-                "BRANCH",
+                "REQUESTING BRANCH",
                 branch_options,
-                key="branch_request_branch_input",
-                help="Branch list is read directly from the active Raw_Data sheet.",
+                key="branch_request_branch_scope_v5",
+                help="The selected branch controls the entire request entry, on-screen report, and downloaded portrait report.",
             )
 
-        model_options = sorted(
-            request_source.loc[request_source["branch"] == request_branch, "model"]
-            .dropna().astype(str).str.strip().unique().tolist()
+        branch_source = (
+            request_source.loc[request_source["branch"] == request_branch]
+            .drop_duplicates(subset=["model"], keep="first")
+            .sort_values(["pareto_class", "model"], na_position="last")
+            .reset_index(drop=True)
         )
-        with input_col2:
-            request_model = st.selectbox(
-                "MODEL",
-                model_options,
-                key="branch_request_model_input",
-                help="Only models available for the selected branch in Raw_Data are shown.",
+        branch_area = ""
+        area_values = [value for value in branch_source["area"].dropna().astype(str).str.strip().unique().tolist() if value]
+        if area_values:
+            branch_area = area_values[0]
+
+        with guide_col:
+            st.markdown(
+                """
+                <div class='import-dialog-note' style='margin-bottom:0;'>
+                    Enter the <b>Request Quantity</b> and <b>Remarks / Justification</b> directly in the request table below.
+                    The report updates automatically and includes every model with Request Quantity greater than zero.
+                    The display and download are limited to the selected branch only—not to one item.
+                </div>
+                """,
+                unsafe_allow_html=True,
             )
 
-        with input_col3:
-            request_quantity = st.number_input(
-                "REQUEST QUANTITY",
-                min_value=0,
-                value=0,
-                step=1,
-                key="branch_request_quantity_input_v2",
-                help="Single quantity field used for the branch request and New DoI simulation.",
-            )
-
-        request_remarks = st.text_area(
-            "REMARKS / JUSTIFICATION",
-            value="",
-            height=82,
-            key="branch_request_remarks_input",
-            placeholder="Example: Branch stockout; customer reservation; event requirement; replenishment needed to restore target DoI...",
-            help="This justification is stored with the request line and included in the downloadable report.",
+        st.markdown(
+            f"""
+            <div style="margin:0.85rem 0 0.9rem 0; padding:1rem 1.15rem; border:1px solid var(--scm-border); border-left:5px solid #4f46e5; border-radius:14px; background:var(--scm-card-bg); box-shadow:var(--scm-theme-shadow);">
+                <div style="font-size:0.66rem; font-weight:900; letter-spacing:0.12em; text-transform:uppercase; color:var(--scm-muted);">REQUESTING BRANCH</div>
+                <div style="font-size:1.55rem; font-weight:900; line-height:1.15; color:var(--scm-text); margin-top:0.18rem;">{html.escape(request_branch)}</div>
+                <div style="font-size:0.76rem; color:var(--scm-muted); margin-top:0.28rem;">{html.escape(branch_area or 'Area not specified')} • {len(branch_source):,} available model(s) from Raw_Data</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
-        # Live one-line validation preview.
-        live_line = [{
-            "Branch": request_branch,
-            "Model": request_model,
-            "Request Quantity": int(request_quantity),
-            "Remarks / Justification": request_remarks,
-        }]
-        live_report = build_branch_request_report(request_source, live_line)
-        live_row = live_report.iloc[0] if not live_report.empty else None
+        section_heading("Request Entry", "Edit Request Quantity and Remarks only • status fields are sourced from Raw_Data")
 
-        if live_row is not None:
-            st.markdown("<div style='height:0.25rem'></div>", unsafe_allow_html=True)
-            preview_col1, preview_col2, preview_col3, preview_col4, preview_col5 = st.columns(5, gap="small")
-            preview_col1.markdown(
-                request_metric_card_html("CURRENT INVENTORY", f"{int(live_row['Inventory']):,}" if pd.notna(live_row["Inventory"]) else "N/A", "RAW_DATA ON-HAND", "blue", "I"),
-                unsafe_allow_html=True,
-            )
-            status_text = str(live_row["Stock Status"] or "N/A")
-            status_tone = "red" if stock_status_style_class(status_text) == "stockout" else "yellow" if stock_status_style_class(status_text) in {"critical", "low"} else "green"
-            preview_col2.markdown(
-                request_metric_card_html("STOCK STATUS", status_text, "CURRENT SOURCE STATUS", status_tone, "S"),
-                unsafe_allow_html=True,
-            )
-            preview_col3.markdown(
-                request_metric_card_html("CURRENT DOI", f"{float(live_row['Current DoI']):.2f}" if pd.notna(live_row["Current DoI"]) else "N/A", "DAYS OF INVENTORY", "blue", "D"),
-                unsafe_allow_html=True,
-            )
-            preview_col4.markdown(
-                request_metric_card_html("NEW INVENTORY", f"{int(live_row['New Inventory']):,}" if pd.notna(live_row["New Inventory"]) else "N/A", "INVENTORY + REQUEST", "green", "+"),
-                unsafe_allow_html=True,
-            )
-            preview_col5.markdown(
-                request_metric_card_html("NEW DOI", f"{float(live_row['New DoI']):.2f}" if pd.notna(live_row["New DoI"]) else "N/A", "PROJECTED COVERAGE", "green", "N"),
-                unsafe_allow_html=True,
-            )
+        editor_df = pd.DataFrame({
+            "Model": branch_source["model"].astype(str),
+            "Class": branch_source["pareto_class"].fillna("").astype(str),
+            "Inventory": pd.to_numeric(branch_source["remaining_inventory"], errors="coerce").fillna(0).astype(int),
+            "Stock Status": branch_source["stock_status"].fillna("").astype(str),
+            "Current DoI": pd.to_numeric(branch_source["doi"], errors="coerce").fillna(0.0).round(2),
+            "Request Quantity": 0,
+            "Remarks / Justification": "",
+        })
 
-        action_col1, action_col2, action_col3, action_col4 = st.columns([1.35, 1.0, 1.0, 4.2], gap="small")
-        with action_col1:
-            if st.button("➕ Add to Report", type="primary", use_container_width=True, key="branch_request_add_line"):
-                st.session_state["branch_request_lines"].append({
-                    "Branch": request_branch,
-                    "Model": request_model,
-                    "Request Quantity": int(request_quantity),
-                    "Remarks / Justification": request_remarks.strip(),
-                })
-                st.rerun()
-        with action_col2:
-            if st.button("↶ Undo Last", use_container_width=True, key="branch_request_undo"):
-                if st.session_state["branch_request_lines"]:
-                    st.session_state["branch_request_lines"].pop()
-                    st.rerun()
-        with action_col3:
-            if st.button("🗑 Clear All", use_container_width=True, key="branch_request_clear"):
-                st.session_state["branch_request_lines"] = []
-                st.rerun()
-        with action_col4:
-            st.caption(
-                "Request Quantity is the only quantity field. New DoI is calculated only when Raw_Data provides a reliable Inventory/DoI basis; unsupported projections remain blank."
-            )
-
-    request_lines = st.session_state.get("branch_request_lines", [])
-    if request_lines:
-        request_report = build_branch_request_report(request_source, request_lines)
-
-        st.markdown("---")
-        section_heading("Branch Request Validation Report", "Review the request lines below, including justification, before downloading")
-
-        total_lines = len(request_report)
-        total_requested = int(pd.to_numeric(request_report["Request Quantity"], errors="coerce").fillna(0).sum())
-        risk_mask = request_report["Stock Status"].fillna("").astype(str).map(stock_status_style_class).isin(["stockout", "critical", "low"])
-        risk_lines = int(risk_mask.sum())
-        remarks_count = int(request_report["Remarks / Justification"].fillna("").astype(str).str.strip().ne("").sum())
-
-        k1, k2, k3, k4 = st.columns(4, gap="small")
-        k1.markdown(request_metric_card_html("REQUEST LINES", f"{total_lines:,}", "ITEMS IN REPORT", "blue", "#"), unsafe_allow_html=True)
-        k2.markdown(request_metric_card_html("TOTAL REQUEST QTY", f"{total_requested:,}", "REQUESTED UNITS", "green", "Q"), unsafe_allow_html=True)
-        k3.markdown(request_metric_card_html("RISK LINES", f"{risk_lines:,}", "STOCKOUT / CRITICAL / LOW", "red" if risk_lines else "green", "!"), unsafe_allow_html=True)
-        k4.markdown(request_metric_card_html("WITH JUSTIFICATION", f"{remarks_count:,}", "REMARKS COMPLETED", "blue", "R"), unsafe_allow_html=True)
-
-        display_columns = [
-            "Branch", "Model", "Request Quantity", "Inventory", "Stock Status",
-            "Current DoI", "New Inventory", "New DoI", "Remarks / Justification", "Request Check"
-        ]
-        display_report = request_report[display_columns].copy()
-        st.dataframe(
-            display_report,
+        editor_key = "branch_request_editor_" + hashlib.md5(request_branch.encode("utf-8")).hexdigest()[:10]
+        edited_requests = st.data_editor(
+            editor_df,
             hide_index=True,
             width="stretch",
+            num_rows="fixed",
+            disabled=["Model", "Class", "Inventory", "Stock Status", "Current DoI"],
+            key=editor_key,
             column_config={
-                "Request Quantity": st.column_config.NumberColumn("Request Quantity", format="%d"),
-                "Inventory": st.column_config.NumberColumn("Inventory", format="%d"),
-                "Current DoI": st.column_config.NumberColumn("Current DoI", format="%.2f"),
-                "New Inventory": st.column_config.NumberColumn("New Inventory", format="%d"),
-                "New DoI": st.column_config.NumberColumn("New DoI", format="%.2f"),
-                "Remarks / Justification": st.column_config.TextColumn("Remarks / Justification", width="large"),
+                "Model": st.column_config.TextColumn("MODEL", width="medium"),
+                "Class": st.column_config.TextColumn("CLASS", width="small"),
+                "Inventory": st.column_config.NumberColumn("INVENTORY", format="%d", width="small"),
+                "Stock Status": st.column_config.TextColumn("STOCK STATUS", width="small"),
+                "Current DoI": st.column_config.NumberColumn("CURRENT DOI", format="%.2f", width="small"),
+                "Request Quantity": st.column_config.NumberColumn(
+                    "REQUEST QUANTITY",
+                    min_value=0,
+                    step=1,
+                    format="%d",
+                    width="small",
+                    help="Enter the quantity requested for this model.",
+                ),
+                "Remarks / Justification": st.column_config.TextColumn(
+                    "REMARKS / JUSTIFICATION",
+                    width="large",
+                    help="State the operational reason for the request.",
+                ),
             },
         )
 
-        download_col1, download_col2, detail_col = st.columns([1.3, 1.15, 3.6], gap="small")
-        with download_col1:
-            try:
-                branch_request_xlsx = build_branch_request_excel(request_report)
-                st.download_button(
-                    "⬇ Download Presentable Excel",
-                    data=branch_request_xlsx,
-                    file_name=f"Branch_Request_Validation_{date.today().strftime('%Y%m%d')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
-                    key="branch_request_download_xlsx",
-                )
-            except Exception as exc:
-                st.error(f"Excel export unavailable: {exc}")
-        with download_col2:
-            branch_request_csv = request_report.to_csv(index=False).encode("utf-8-sig")
-            st.download_button(
-                "⬇ Download CSV",
-                data=branch_request_csv,
-                file_name=f"Branch_Request_Validation_{date.today().strftime('%Y%m%d')}.csv",
-                mime="text/csv",
-                use_container_width=True,
-                key="branch_request_download_csv",
+        edited_requests["Request Quantity"] = (
+            pd.to_numeric(edited_requests["Request Quantity"], errors="coerce").fillna(0).clip(lower=0).round().astype(int)
+        )
+        active_requests = edited_requests[edited_requests["Request Quantity"] > 0].copy()
+
+        if active_requests.empty:
+            st.info(
+                "Enter a Request Quantity greater than zero for one or more models. "
+                "The Branch Request Status report will generate automatically below."
             )
-        with detail_col:
-            st.caption(
-                "Projection basis: Implied Average Daily Sales = Current Inventory ÷ Current DoI; "
-                "New DoI = (Current Inventory + Request Quantity) ÷ Implied Average Daily Sales. "
-                "The Excel export includes an executive title block, summary cards, status highlighting, justification, print setup, and sign-off fields."
+        else:
+            request_lines = [
+                {
+                    "Branch": request_branch,
+                    "Model": str(row["Model"]),
+                    "Request Quantity": int(row["Request Quantity"]),
+                    "Remarks / Justification": str(row["Remarks / Justification"] or "").strip(),
+                }
+                for _, row in active_requests.iterrows()
+            ]
+            request_report = build_branch_request_report(request_source, request_lines)
+
+            st.markdown("---")
+            section_heading(
+                "Generated Branch Request Report",
+                f"Automatic update • {request_branch} • {len(request_report):,} requested item(s)",
             )
 
-        with st.expander("View Full Validation Detail"):
-            st.dataframe(request_report, hide_index=True, width="stretch")
-    else:
-        st.info("Add one or more Branch + Model request lines to build the downloadable validation report.")
+            total_lines = len(request_report)
+            total_requested = int(pd.to_numeric(request_report["Request Quantity"], errors="coerce").fillna(0).sum())
+            risk_mask = request_report["Stock Status"].fillna("").astype(str).map(stock_status_style_class).isin(["stockout", "critical", "low"])
+            risk_lines = int(risk_mask.sum())
+            remarks_count = int(request_report["Remarks / Justification"].fillna("").astype(str).str.strip().ne("").sum())
+
+            k1, k2, k3, k4 = st.columns(4, gap="small")
+            k1.markdown(request_metric_card_html("REQUESTED ITEMS", f"{total_lines:,}", "MODELS INCLUDED", "blue", "#"), unsafe_allow_html=True)
+            k2.markdown(request_metric_card_html("TOTAL REQUEST QTY", f"{total_requested:,}", "REQUESTED UNITS", "green", "Q"), unsafe_allow_html=True)
+            k3.markdown(request_metric_card_html("RISK ITEMS", f"{risk_lines:,}", "STOCKOUT / CRITICAL / LOW", "red" if risk_lines else "green", "!"), unsafe_allow_html=True)
+            k4.markdown(request_metric_card_html("JUSTIFIED", f"{remarks_count:,}/{total_lines:,}", "WITH REMARKS", "blue", "R"), unsafe_allow_html=True)
+
+            st.markdown("<div style='height:0.35rem'></div>", unsafe_allow_html=True)
+
+            # Portrait-inspired on-screen presentation: each model is a vertical card, not one wide report row.
+            for item_no, (_, row) in enumerate(request_report.iterrows(), start=1):
+                status_text = str(row.get("Stock Status", "") or "N/A")
+                status_class = stock_status_style_class(status_text)
+                status_tone = "red" if status_class == "stockout" else "yellow" if status_class in {"critical", "low"} else "green"
+
+                with st.container(border=True):
+                    head_left, head_right = st.columns([4.7, 1.3], gap="small", vertical_alignment="center")
+                    with head_left:
+                        st.markdown(
+                            f"""
+                            <div style="font-size:0.63rem;font-weight:900;letter-spacing:0.11em;text-transform:uppercase;color:var(--scm-muted);">ITEM {item_no:02d}</div>
+                            <div style="font-size:1.12rem;font-weight:900;color:var(--scm-text);margin-top:0.12rem;">{html.escape(str(row['Model']))}</div>
+                            <div style="font-size:0.72rem;color:var(--scm-muted);margin-top:0.12rem;">{html.escape(str(row.get('Class', '') or 'Unclassified'))}</div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                    with head_right:
+                        st.markdown(
+                            request_metric_card_html("STOCK STATUS", status_text, "CURRENT STATUS", status_tone, "S"),
+                            unsafe_allow_html=True,
+                        )
+
+                    m1, m2, m3, m4, m5 = st.columns(5, gap="small")
+                    m1.markdown(request_metric_card_html("REQUEST QTY", f"{int(row['Request Quantity']):,}", "REQUESTED", "blue", "Q"), unsafe_allow_html=True)
+                    m2.markdown(request_metric_card_html("CURRENT INV", f"{int(row['Inventory']):,}" if pd.notna(row["Inventory"]) else "N/A", "RAW_DATA", "blue", "I"), unsafe_allow_html=True)
+                    m3.markdown(request_metric_card_html("NEW INV", f"{int(row['New Inventory']):,}" if pd.notna(row["New Inventory"]) else "N/A", "AFTER REQUEST", "green", "+"), unsafe_allow_html=True)
+                    m4.markdown(request_metric_card_html("CURRENT DOI", f"{float(row['Current DoI']):.2f}" if pd.notna(row["Current DoI"]) else "N/A", "DAYS", "blue", "D"), unsafe_allow_html=True)
+                    m5.markdown(request_metric_card_html("NEW DOI", f"{float(row['New DoI']):.2f}" if pd.notna(row["New DoI"]) else "N/A", "PROJECTED", "green", "N"), unsafe_allow_html=True)
+
+                    remarks_text = str(row.get("Remarks / Justification", "") or "").strip() or "No justification entered."
+                    st.markdown(
+                        f"""
+                        <div style="margin-top:0.45rem;padding:0.72rem 0.82rem;border-radius:10px;border:1px solid rgba(245,158,11,0.24);background:rgba(245,158,11,0.06);">
+                            <div style="font-size:0.62rem;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;color:#d97706;">Remarks / Justification</div>
+                            <div style="font-size:0.80rem;line-height:1.45;color:var(--scm-text);margin-top:0.18rem;">{html.escape(remarks_text)}</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+            st.markdown("<div style='height:0.45rem'></div>", unsafe_allow_html=True)
+            download_col1, download_col2, note_col = st.columns([1.55, 1.15, 3.8], gap="small")
+            with download_col1:
+                try:
+                    portrait_xlsx = build_branch_request_excel(request_report)
+                    safe_branch = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in request_branch).strip("_") or "Branch"
+                    st.download_button(
+                        "⬇ Download Portrait Excel",
+                        data=portrait_xlsx,
+                        file_name=f"Branch_Request_{safe_branch}_{date.today().strftime('%Y%m%d')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                        key="branch_request_download_portrait_xlsx_v5",
+                    )
+                except Exception as exc:
+                    st.error(f"Excel export unavailable: {exc}")
+            with download_col2:
+                branch_request_csv = request_report.to_csv(index=False).encode("utf-8-sig")
+                st.download_button(
+                    "⬇ Download CSV",
+                    data=branch_request_csv,
+                    file_name=f"Branch_Request_{date.today().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                    key="branch_request_download_csv_v5",
+                )
+            with note_col:
+                st.caption(
+                    "Excel is formatted for A4 Portrait. It shows the requesting branch at the top and stacks all requested models vertically so multiple items remain readable when printed."
+                )
+
+            with st.expander("View Full Validation Data"):
+                st.dataframe(request_report, hide_index=True, width="stretch")
 
 
 # =========================================================
