@@ -2496,11 +2496,7 @@ with tab_branch_requests:
                             {html.escape(branch_area or 'Area not specified')} • {len(branch_source):,} model(s) available in dropdown
                         </div>
                     </div>
-                    <div style="max-width:520px;font-size:0.75rem;line-height:1.5;color:var(--scm-muted);">
-                        Add one or more request lines. Select each <b>Model</b> from the dropdown,
-                        enter <b>Quantity Request</b>, and provide <b>Remarks / Justification</b>.
-                        The validation report recalculates automatically.
-                    </div>
+             
                 </div>
             </div>
             """,
@@ -2509,7 +2505,7 @@ with tab_branch_requests:
 
         section_heading(
             "Request Builder",
-            "Add rows as needed • Model is a branch-filtered dropdown • duplicate models are not allowed",
+            
         )
 
         editor_seed = pd.DataFrame([
